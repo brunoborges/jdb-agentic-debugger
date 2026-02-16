@@ -73,6 +73,15 @@ bash scripts/jdb-diagnostics.sh --port 5005 --output /tmp/diagnostics.txt
 bash scripts/jdb-breakpoints.sh --breakpoints my-breakpoints.txt --port 5005
 ```
 
+## Blog Posts & Announcements
+
+- [Substack — Enabling AI Agents to Use a Real Debugger Instead of Logging](https://brunocborges.substack.com/p/enabling-ai-agents-to-use-a-real)
+- [LinkedIn — Enabling AI Agents to Use a Real Debugger Instead of Logging](https://www.linkedin.com/pulse/enabling-ai-agents-use-real-debugger-instead-logging-bruno-borges-uty4e/)
+- [Foojay — Enabling AI Agents to Use a Real Debugger Instead of Logging](https://foojay.io/today/enabling-ai-agents-to-use-a-real-debugger-instead-of-logging/)
+- [DEV Community — Enabling AI Agents to Use a Real Debugger Instead of Logging](https://dev.to/brunoborges/enabling-ai-agents-to-use-a-real-debugger-instead-of-logging-bep)
+- [Medium — Enabling AI Agents to Use a Real Debugger Instead of Logging](https://medium.com/@brunoborges/enabling-ai-agents-to-use-a-real-debugger-instead-of-logging-7d8250940845)
+- [X/Twitter — Announcement](https://x.com/brunoborges/status/2023504791192617148)
+
 ## License
 
 Apache-2.0
