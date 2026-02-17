@@ -1,6 +1,6 @@
 # jdb-debugger
 
-An [Agent Skill](https://agentskills.io/specification) that teaches AI agents to debug Java applications in real time using JDB — the command-line debugger shipped with every JDK.
+A Claude Code plugin that teaches AI agents to debug Java applications in real time using JDB — the command-line debugger shipped with every JDK. Also works as a standalone [Agent Skill](https://agentskills.io/specification).
 
 ## See demo
 
@@ -23,21 +23,26 @@ When activated, this skill enables AI agents to:
 ## Repository Structure
 
 ```
-├── jdb-debugger-skill/                 # Skill package
-│   ├── SKILL.md                        # Main skill instructions
-│   ├── scripts/
-│   │   ├── jdb-launch.sh              # Launch a JVM under JDB
-│   │   ├── jdb-attach.sh             # Attach JDB to a running JVM
-│   │   ├── jdb-diagnostics.sh        # Collect thread dumps & diagnostics
-│   │   └── jdb-breakpoints.sh        # Bulk-load breakpoints from a file
-│   └── references/
-│       ├── jdb-commands.md            # Complete JDB command reference
-│       └── jdwp-options.md            # JDWP agent configuration options
-├── jdb-debugger-agents/                # Custom agents (VS Code Copilot)
+├── .claude-plugin/
+│   └── plugin.json                     # Plugin manifest for Claude Code
+├── agents/                              # Custom agents
 │   ├── jdb-debugger.agent.md          # Orchestrator — triages and delegates
 │   ├── jdb-session.agent.md           # Interactive debugging sub-agent
 │   ├── jdb-diagnostics.agent.md       # Quick diagnostics sub-agent
 │   └── jdb-analyst.agent.md           # Read-only analysis sub-agent
+├── skills/
+│   └── jdb-debugger/                   # Skill package
+│       ├── SKILL.md                    # Main skill instructions
+│       ├── scripts/
+│       │   ├── jdb-launch.sh          # Launch a JVM under JDB
+│       │   ├── jdb-attach.sh          # Attach JDB to a running JVM
+│       │   ├── jdb-diagnostics.sh     # Collect thread dumps & diagnostics
+│       │   └── jdb-breakpoints.sh     # Bulk-load breakpoints from a file
+│       └── references/
+│           ├── jdb-commands.md         # Complete JDB command reference
+│           └── jdwp-options.md         # JDWP agent configuration options
+├── jdb-debugger-agents/                # Legacy location (for VS Code Copilot compatibility)
+├── jdb-debugger-skill/                 # Legacy location (for standalone skill usage)
 ├── sample-app/                         # Example Java app for testing
 │   └── src/main/java/com/example/
 │       └── WarningAppTest.java
@@ -47,7 +52,7 @@ When activated, this skill enables AI agents to:
 
 ## Custom Agents
 
-The skill includes a multi-agent chain for orchestrated Java debugging workflows. The agents are defined as `.agent.md` files in the `jdb-debugger-agents/` directory and can be used with VS Code Copilot's custom agent feature.
+The plugin includes a multi-agent chain for orchestrated Java debugging workflows. The agents are defined as `.agent.md` files in the `agents/` directory and work with Claude Code plugins and VS Code Copilot's custom agent feature.
 
 ### Agent Architecture
 
@@ -67,12 +72,18 @@ User → JDB Debugger (orchestrator)
 
 ### Usage
 
-1. Copy the `jdb-debugger-agents/` files into your project's `.github/agents/` folder (or keep them alongside the skill)
-2. Open VS Code Copilot Chat and select the **JDB Debugger** agent from the agent picker
+**With Claude Code (plugin):**
+1. Install the plugin (see Quick Start below)
+2. The **JDB Debugger** agent will be available in your agent picker
 3. Describe what you need:
    - *"Debug the NullPointerException in WarningAppTest"* → routes to `jdb-session`
    - *"Collect a thread dump from port 5005"* → routes to `jdb-diagnostics`
    - *"Analyze this stack trace"* → routes to `jdb-analyst`
+
+**With VS Code Copilot (standalone agents):**
+1. Copy the `jdb-debugger-agents/` files into your project's `.github/agents/` folder
+2. Open VS Code Copilot Chat and select the **JDB Debugger** agent from the agent picker
+3. Use as described above
 
 ### How the Agent Flow Works
 
@@ -134,18 +145,36 @@ You click: [Debug interactively]
 
 ## Quick Start
 
-### Use with Claude Code
+### Install as a Claude Code Plugin (Recommended)
 
+**Option 1: Install from GitHub**
+```bash
+# In Claude Code chat
+/plugin install github:brunoborges/jdb-agentic-debugger
+```
+
+**Option 2: Install from local directory**
+```bash
+# Clone the repository
+git clone https://github.com/brunoborges/jdb-agentic-debugger.git
+
+# In Claude Code settings, add the plugin path
+# Settings > Plugins > Add Local Plugin > Select the cloned directory
+```
+
+Once installed, the JDB Debugger agent and skill will be available in Claude Code.
+
+### Use as a Standalone Skill
+
+**With Claude Code:**
 ```bash
 /skill install jdb-debugger
 ```
 
-### Use with Claude.ai
+**With Claude.ai:**
+Upload the `skills/jdb-debugger/` or `jdb-debugger-skill/` directory as a custom skill via **Settings > Capabilities**.
 
-Upload the `jdb-debugger-skill/` directory as a custom skill via **Settings > Capabilities**.
-
-### Use via API
-
+**Via API:**
 Attach the skill directory to your API request per the [Skills API guide](https://docs.claude.com/en/api/skills-guide).
 
 ## Prerequisites
@@ -163,17 +192,19 @@ All scripts support `--help` for full usage details.
 
 ```bash
 # Launch a new JVM under JDB
-bash jdb-debugger-skill/scripts/jdb-launch.sh com.example.Main --sourcepath src/main/java
+bash skills/jdb-debugger/scripts/jdb-launch.sh com.example.Main --sourcepath src/main/java
 
 # Attach to a running JVM
-bash jdb-debugger-skill/scripts/jdb-attach.sh --port 5005
+bash skills/jdb-debugger/scripts/jdb-attach.sh --port 5005
 
 # Collect diagnostics
-bash jdb-debugger-skill/scripts/jdb-diagnostics.sh --port 5005 --output /tmp/diagnostics.txt
+bash skills/jdb-debugger/scripts/jdb-diagnostics.sh --port 5005 --output /tmp/diagnostics.txt
 
 # Load breakpoints from file
-bash jdb-debugger-skill/scripts/jdb-breakpoints.sh --breakpoints my-breakpoints.txt --port 5005
+bash skills/jdb-debugger/scripts/jdb-breakpoints.sh --breakpoints my-breakpoints.txt --port 5005
 ```
+
+**Note:** The legacy paths (`jdb-debugger-skill/scripts/...`) still work for backward compatibility.
 
 ## Blog Posts & Announcements
 

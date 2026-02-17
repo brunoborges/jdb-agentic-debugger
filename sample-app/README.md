@@ -1,6 +1,6 @@
-# Sample App — WarningApp
+# Sample App — JDB Testing Application
 
-A simple Swing application with **intentional bugs** for testing the `jdb-debugger` skill.
+A simple console application with **intentional bugs** for testing the `jdb-debugger` plugin.
 
 ## Build & Run
 
@@ -8,13 +8,13 @@ A simple Swing application with **intentional bugs** for testing the `jdb-debugg
 cd sample-app
 
 # Compile
-javac -d out src/main/java/com/example/WarningApp.java
+javac -g -d out src/main/java/com/example/WarningAppTest.java
 
 # Run normally
-java -cp out com.example.WarningApp
+java -cp out com.example.WarningAppTest
 
 # Run with JDWP for remote debugging
-java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out com.example.WarningApp
+java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out com.example.WarningAppTest
 ```
 
 ## Intentional Bugs
@@ -31,6 +31,6 @@ java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp ou
 Use the `jdb-debugger` skill to:
 
 1. **Catch the NPE**: `catch java.lang.NullPointerException`, then trigger bug #1
-2. **Watch the counter**: Set `stop at com.example.WarningApp:88` and inspect `warningCount`
+2. **Watch the counter**: Set `stop at com.example.WarningAppTest:50` and inspect `warningCount`
 3. **Find the memory leak**: Set breakpoint in `clearHistory()` and inspect `warningHistory`
 4. **Catch bounds error**: `catch java.lang.StringIndexOutOfBoundsException`, enter "Hi"
