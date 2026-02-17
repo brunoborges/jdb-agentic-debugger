@@ -1,0 +1,25 @@
+{
+  "name": "jdb-debugger",
+  "version": "1.0.0",
+  "description": "Debug Java applications in real time using JDB (Java Debugger CLI). Attach to running JVMs or launch new ones under JDB, set breakpoints, step through code, inspect variables, analyze threads, and diagnose exceptions.",
+  "keywords": [
+    "java",
+    "debugger",
+    "jdb",
+    "debugging",
+    "jvm",
+    "jdwp",
+    "development-tools",
+    "troubleshooting"
+  ],
+  "author": {
+    "name": "brunoborges"
+  },
+  "strict": true,
+  "agents": [
+    "./agents/jdb-debugger.agent.md",
+    "./agents/jdb-session.agent.md",
+    "./agents/jdb-diagnostics.agent.md",
+    "./agents/jdb-analyst.agent.md"
+  ]
+}
