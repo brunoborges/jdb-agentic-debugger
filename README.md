@@ -1,6 +1,6 @@
 # JDB Agentic Debugger
 
-An AI agent plugin that teaches AI agents to debug Java applications in real time using JDB — the command-line debugger shipped with every JDK. Compatible with [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [GitHub Copilot CLI](https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-coding-agent).
+An AI agent plugin that teaches AI agents to debug Java applications in real time using [**JDB**](https://docs.oracle.com/en/java/javase/25/docs/specs/man/jdb.html) — the command-line debugger shipped with every JDK. Compatible with [GitHub Copilot CLI](https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-coding-agent) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
 
 ## See demo
 
