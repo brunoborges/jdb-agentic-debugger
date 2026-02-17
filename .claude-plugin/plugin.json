@@ -15,7 +15,6 @@
   "author": {
     "name": "brunoborges"
   },
-  "strict": true,
   "agents": [
     "./agents/jdb-debugger.agent.md",
     "./agents/jdb-session.agent.md",
