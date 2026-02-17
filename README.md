@@ -2,6 +2,10 @@
 
 An [Agent Skill](https://agentskills.io/specification) that teaches AI agents to debug Java applications in real time using JDB — the command-line debugger shipped with every JDK.
 
+## Demo
+
+<video src="docs/demo.mp4" controls width="100%"></video>
+
 ## What This Skill Does
 
 When activated, this skill enables AI agents to:
