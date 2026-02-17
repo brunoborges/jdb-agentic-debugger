@@ -1,6 +1,6 @@
-# JDB Debugger - Claude Code Plugin
+# JDB Agentic Debugger
 
-A debugging plugin for Claude Code and GitHub Copilot CLI that enables AI-powered Java debugging using JDB (Java Debugger).
+An AI agent plugin that enables AI-powered Java debugging using JDB (Java Debugger). Compatible with Claude Code and GitHub Copilot CLI.
 
 ## Overview
 
