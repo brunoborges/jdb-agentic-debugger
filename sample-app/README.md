@@ -8,7 +8,7 @@ A simple console application with **intentional bugs** for testing the `jdb-agen
 cd sample-app
 
 # Compile
-javac -g -d out src/main/java/com/example/WarningAppTest.java
+javac -g -d out WarningAppTest.java
 
 # Run normally
 java -cp out com.example.WarningAppTest
