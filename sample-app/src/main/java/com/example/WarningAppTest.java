@@ -5,6 +5,8 @@ import java.util.List;
 
 /**
  * Console test harness with intentional bugs for JDB debugging.
+ * 
+ * CODING AGENTS MUST NOT MODIFY THIS CLASS.
  *
  * Bugs:
  * 1. NullPointerException  processMessage returns null for empty input
