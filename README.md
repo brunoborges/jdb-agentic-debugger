@@ -39,28 +39,6 @@ The `.agent.md` files in `agents/` and the skill in `skills/jdb-debugger/` are c
 /plugin install jdb-agentic-debugger@jdb-agentic-debugger
 ```
 
-## Repository Structure
-
-```
-jdb-agentic-debugger/
-├── .claude-plugin/
-│   ├── plugin.json              # Plugin manifest (Claude Code)
-│   └── marketplace.json         # Marketplace catalog
-├── agents/
-│   ├── jdb-debugger.agent.md    # Orchestrator — triages and delegates
-│   ├── jdb-session.agent.md     # Interactive debugging sub-agent
-│   ├── jdb-diagnostics.agent.md # Quick diagnostics sub-agent
-│   └── jdb-analyst.agent.md     # Read-only analysis sub-agent
-├── skills/
-│   └── jdb-debugger/
-│       ├── SKILL.md              # Main skill instructions
-│       ├── scripts/              # JDB wrapper scripts
-│       └── references/           # JDB command reference
-├── sample-app/                   # Example Java app for testing
-└── docs/
-    └── demo.mp4                  # Demo video
-```
-
 ## Agents
 
 The plugin includes a multi-agent chain for orchestrated Java debugging workflows. The agents are defined as `.agent.md` files in the `agents/` directory and work with both Claude Code and GitHub Copilot.
