@@ -1,0 +1,11 @@
+{
+  "name": "jdb-agentic-debugger",
+  "description": "Debug Java applications in real time using JDB. Launch JVMs under JDB, attach to running processes, set breakpoints, step through code, inspect variables, analyze threads, and diagnose exceptions.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Bruno Borges"
+  },
+  "homepage": "https://github.com/brunoborges/jdb-agentic-debugger",
+  "repository": "https://github.com/brunoborges/jdb-agentic-debugger",
+  "license": "Apache-2.0"
+}
