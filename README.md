@@ -147,32 +147,19 @@ You click: [Debug interactively]
 
 ### Install as a Claude Code Plugin (Recommended)
 
-**Option 1: Install from GitHub**
 ```bash
-# In Claude Code chat
-/plugin install github:brunoborges/jdb-agentic-debugger
+# Add the marketplace
+/plugin marketplace add brunoborges/jdb-agentic-debugger
+
+# Install the plugin
+/plugin install jdb-agentic-debugger@jdb-agentic-debugger
 ```
 
-**Option 2: Install from local directory**
-```bash
-# Clone the repository
-git clone https://github.com/brunoborges/jdb-agentic-debugger.git
+Once installed, the JDB Debugger skill will be available in Claude Code.
 
-# In Claude Code settings, add the plugin path
-# Settings > Plugins > Add Local Plugin > Select the cloned directory
-```
+### Use with Claude.ai
 
-Once installed, the JDB Debugger agent and skill will be available in Claude Code.
-
-### Use as a Standalone Skill
-
-**With Claude Code:**
-```bash
-/skill install jdb-debugger
-```
-
-**With Claude.ai:**
-Upload the `skills/jdb-debugger/` or `jdb-debugger-skill/` directory as a custom skill via **Settings > Capabilities**.
+Upload the `jdb-debugger-skill/` directory as a custom skill via **Settings > Capabilities**.
 
 **Via API:**
 Attach the skill directory to your API request per the [Skills API guide](https://docs.claude.com/en/api/skills-guide).
