@@ -21,6 +21,14 @@ When activated, this plugin enables AI agents to:
 
 ## Quick Start
 
+### GitHub Copilot CLI
+
+The `.agent.md` files in `agents/` and the skill in `skills/jdb-debugger/` are compatible with [GitHub Copilot coding agent](https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-coding-agent). To use them:
+
+1. Copy the `agents/` files into your project's `.github/agents/` folder
+2. Copy the `skills/jdb-debugger/` directory into your project (or reference it)
+3. Open Copilot Chat and select the **JDB Debugger** agent from the agent picker
+
 ### Claude Code CLI
 
 ```bash
@@ -30,14 +38,6 @@ When activated, this plugin enables AI agents to:
 # Install the plugin
 /plugin install jdb-agentic-debugger@jdb-agentic-debugger
 ```
-
-### GitHub Copilot CLI
-
-The `.agent.md` files in `agents/` and the skill in `skills/jdb-debugger/` are compatible with [GitHub Copilot coding agent](https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-coding-agent). To use them:
-
-1. Copy the `agents/` files into your project's `.github/agents/` folder
-2. Copy the `skills/jdb-debugger/` directory into your project (or reference it)
-3. Open Copilot Chat and select the **JDB Debugger** agent from the agent picker
 
 ## Repository Structure
 
