@@ -2,6 +2,24 @@
 
 An AI agent plugin that teaches AI agents to debug Java applications in real time using [**JDB**](https://docs.oracle.com/en/java/javase/25/docs/specs/man/jdb.html) — the command-line debugger shipped with every JDK. Compatible with [GitHub Copilot CLI](https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-coding-agent) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
 
+## Why an Agentic Debugger?
+
+AI coding agents are already powerful static analysts. They can read source code, decompile `.class` files, run `javap` to inspect bytecode, parse stack traces, and reason about what *should* happen at runtime. When that isn't enough, they insert print statements, re-run the program, and parse the output — iterating until they converge on the bug.
+
+So why give them a debugger?
+
+Because **static analysis and logging can only tell you what the code *says* — a debugger tells you what the code *does*.** Many bugs live in the gap between the two: race conditions that depend on thread scheduling, state corruption that builds up across hundreds of method calls, environment-specific behavior driven by configuration or classloader ordering, or failures deep inside third-party libraries where decompiled code is hard to follow. These bugs don't yield to reading; they have to be caught in the act.
+
+A debugger attached to a **live, running application** gives an agent capabilities that no amount of static reasoning can replicate:
+
+- **Observe actual runtime state** — variable values, object graphs, and thread states as they exist at a specific moment in execution, not as the agent infers they *might* be.
+- **Catch the exact moment of failure** — break on an exception the instant it's thrown, before it propagates and gets wrapped, rather than reasoning backwards from a stack trace.
+- **Follow real execution flow** — step through the actual path the code takes, including polymorphic dispatch, reflection, and dynamically loaded classes that are invisible to static analysis.
+- **Inspect without modifying** — no print statements to add, commit, and later clean up. No risk of Heisenbugs caused by logging changing timing or behavior. The codebase stays untouched.
+- **Debug live environments** — attach to a running JVM in staging or production to investigate issues that only reproduce under real load, real data, and real configuration — something print-and-rerun simply cannot do.
+
+Decompilers and bytecode tools help an agent understand *structure*. A debugger helps it understand *behavior*. The combination is what makes an agent a genuinely effective debugger, not just a code reader that guesses well. JDB ships with every JDK, requires no IDE, and works over a simple text protocol — making it the ideal bridge between AI agents and live Java processes.
+
 ## What This Plugin Does
 
 When activated, this plugin enables AI agents to:
