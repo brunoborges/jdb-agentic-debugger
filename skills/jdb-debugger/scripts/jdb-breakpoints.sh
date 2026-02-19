@@ -16,6 +16,7 @@ Breakpoint sources (use one):
 Batch mode (use one, requires --bp or --breakpoints):
   --auto-inspect <N>     Run N cycles of where+locals+cont, then quit
   --cmd <command>        JDB command to execute after breakpoints (repeatable)
+  --timeout <seconds>    Kill JDB session after this many seconds (for hanging apps)
 
 Connection options:
   --host <hostname>      Attach to host (default: launch mode)
@@ -41,6 +42,11 @@ Examples:
     --bp "catch java.lang.NullPointerException" \\
     --auto-inspect 10
 
+  # Batch with timeout for potentially hanging apps
+  $(basename "$0") --mainclass com.example.Main \\
+    --bp "catch java.lang.Exception" \\
+    --auto-inspect 10 --timeout 30
+
   # Batch: inline breakpoints + custom commands
   $(basename "$0") --mainclass com.example.Main \\
     --bp "stop in com.example.Main.process" \\
@@ -57,6 +63,7 @@ MAINCLASS=""
 SOURCEPATH=""
 CLASSPATH_ARG=""
 AUTO_INSPECT=""
+TIMEOUT=""
 declare -a BP_ARGS=()
 declare -a CMD_ARGS=()
 
@@ -79,6 +86,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --auto-inspect)
       AUTO_INSPECT="$2"
+      shift 2
+      ;;
+    --timeout)
+      TIMEOUT="$2"
       shift 2
       ;;
     --host)
@@ -187,45 +198,70 @@ if [[ "$IS_BATCH" == true ]]; then
   CONT_DELAY="${JDB_CONT_DELAY:-1}"
 
   echo "Running in batch mode..."
+  [[ -n "$TIMEOUT" ]] && echo "Timeout: ${TIMEOUT}s"
   echo ""
 
-  (
-    # Send breakpoint commands
-    while IFS= read -r line; do
-      [[ -z "$line" ]] && continue
-      echo "$line"
-      sleep "$BP_DELAY"
-    done < <(echo -e "$INIT_CMDS")
+  run_batch() {
+    (
+      # Send breakpoint commands
+      while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        echo "$line"
+        sleep "$BP_DELAY"
+      done < <(echo -e "$INIT_CMDS")
 
-    if [[ -n "$AUTO_INSPECT" ]]; then
-      # Auto-inspect mode: run + N cycles of where/locals/cont + quit
-      echo "run"
-      sleep "$RUN_DELAY"
+      if [[ -n "$AUTO_INSPECT" ]]; then
+        # Auto-inspect mode: run + N cycles of where/locals/cont + quit
+        echo "run"
+        sleep "$RUN_DELAY"
 
-      for ((i = 1; i <= AUTO_INSPECT; i++)); do
-        echo "where"
-        sleep "$CMD_DELAY"
-        echo "locals"
-        sleep "$CMD_DELAY"
-        echo "cont"
-        sleep "$CONT_DELAY"
-      done
-
-      echo "quit"
-    else
-      # Custom commands mode
-      for cmd_arg in "${CMD_ARGS[@]}"; do
-        echo "$cmd_arg"
-        if [[ "$cmd_arg" == "run" ]]; then
-          sleep "$RUN_DELAY"
-        elif [[ "$cmd_arg" == "cont" ]]; then
-          sleep "$CONT_DELAY"
-        else
+        for ((i = 1; i <= AUTO_INSPECT; i++)); do
+          echo "where"
           sleep "$CMD_DELAY"
-        fi
-      done
-    fi
-  ) | $CMD
+          echo "locals"
+          sleep "$CMD_DELAY"
+          echo "cont"
+          sleep "$CONT_DELAY"
+        done
+
+        echo "quit"
+      else
+        # Custom commands mode
+        for cmd_arg in "${CMD_ARGS[@]}"; do
+          echo "$cmd_arg"
+          if [[ "$cmd_arg" == "run" ]]; then
+            sleep "$RUN_DELAY"
+          elif [[ "$cmd_arg" == "cont" ]]; then
+            sleep "$CONT_DELAY"
+          else
+            sleep "$CMD_DELAY"
+          fi
+        done
+      fi
+    ) | $CMD
+  }
+
+  if [[ -n "$TIMEOUT" ]]; then
+    # Run with timeout — kill the session if it exceeds the limit
+    run_batch &
+    BATCH_PID=$!
+    (
+      sleep "$TIMEOUT"
+      if kill -0 "$BATCH_PID" 2>/dev/null; then
+        echo ""
+        echo "=== TIMEOUT: JDB session killed after ${TIMEOUT}s (app may be hanging/deadlocked) ==="
+        kill -TERM "$BATCH_PID" 2>/dev/null
+        sleep 2
+        kill -9 "$BATCH_PID" 2>/dev/null
+      fi
+    ) &
+    TIMER_PID=$!
+    wait "$BATCH_PID" 2>/dev/null || true
+    kill "$TIMER_PID" 2>/dev/null || true
+    wait "$TIMER_PID" 2>/dev/null || true
+  else
+    run_batch
+  fi
 
 else
   # Interactive mode: feed breakpoints then hand control to terminal

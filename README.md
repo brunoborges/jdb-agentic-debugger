@@ -62,15 +62,15 @@ The plugin includes a multi-agent chain for orchestrated Java debugging workflow
 User → JDB Debugger (orchestrator)
          ├── jdb-session       → Interactive debugging (launch/attach, breakpoints, stepping)
          ├── jdb-diagnostics   → Quick JVM health checks (thread dumps, deadlock detection)
-         └── jdb-analyst       → Read-only analysis (stack traces, root cause reports)
+         └── jdb-analyst       → Analysis and report consolidation
 ```
 
 | Agent | Role | Tools | User-Invocable |
 |-------|------|-------|----------------|
-| `JDB Debugger` | Orchestrator — triages requests and delegates | `read`, `search`, `agent` | Yes |
-| `jdb-session` | Interactive JDB sessions (launch/attach) | `execute`, `read`, `search` | No |
+| `JDB Debugger` | Orchestrator — triages requests, dispatches sub-agents in parallel | `read`, `search`, `agent`, `write` | Yes |
+| `jdb-session` | Interactive JDB sessions (launch/attach), writes `findings-<Class>.md` | `execute`, `read`, `search`, `write` | No |
 | `jdb-diagnostics` | Automated diagnostics collection | `execute`, `read` | No |
-| `jdb-analyst` | Read-only analysis of traces and logs | `read`, `search` | No |
+| `jdb-analyst` | Consolidates findings into `DEBUG-REPORT.md` | `read`, `search`, `write` | No |
 
 ### Usage
 
@@ -88,6 +88,12 @@ The **JDB Debugger** agent is the orchestrator — you interact with it directly
 2. **Describe your debugging need** in natural language.
 3. **The orchestrator triages** your request and gathers context.
 4. **The orchestrator hands off** to the right sub-agent.
+
+#### Parallel Debugging
+
+When multiple independent applications need debugging, the orchestrator dispatches one `jdb-session` sub-agent **per application in parallel**. Each sub-agent writes its findings to a `findings-<ClassName>.md` file. Once all sub-agents complete, the orchestrator hands off the findings files to `jdb-analyst` for consolidation into a single `DEBUG-REPORT.md`.
+
+This file-based reporting avoids the problem of background agents whose text responses cannot be read back, and prevents duplicate work from re-dispatching.
 
 #### Handoff Buttons
 
@@ -149,7 +155,17 @@ bash skills/jdb-debugger/scripts/jdb-diagnostics.sh --port 5005 --output /tmp/di
 
 # Load breakpoints from file
 bash skills/jdb-debugger/scripts/jdb-breakpoints.sh --breakpoints my-breakpoints.txt --port 5005
+
+# Debug with a timeout (for apps that may hang/deadlock)
+bash skills/jdb-debugger/scripts/jdb-breakpoints.sh \
+  --mainclass com.example.Main --classpath classes \
+  --bp "catch java.lang.Exception" \
+  --auto-inspect 10 --timeout 60
 ```
+
+## Benchmark Results
+
+See the [`results/`](results/) folder for benchmark comparisons between agent (parallel) and serial execution modes.
 
 ## Blog Posts & Announcements
 

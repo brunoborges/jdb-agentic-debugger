@@ -21,7 +21,16 @@ You are investigating Java applications that users have reported contain are not
 4. Write a file called `DEBUG-REPORT.md` in the current directory with your findings.
 
 ## DEBUG-REPORT.md Format
-The report MUST include a section for each bug found with:
+The report MUST include:
+
+### Timing Header
+At the top of the report, include the start and end time of the debugging session:
+- **Start Time**: Run `date -u +"%Y-%m-%dT%H:%M:%SZ"` as your **very first action** before doing anything else, and record its output.
+- **End Time**: Run `date -u +"%Y-%m-%dT%H:%M:%SZ"` as your **very last action** right before writing the report, and record its output.
+- **Duration**: Calculate and display the total elapsed time between start and end.
+
+### Bug Sections
+For each bug found, include:
 - A short title describing the bug
 - The exception type or symptom observed
 - The method and line where it occurs
