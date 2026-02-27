@@ -15,7 +15,7 @@ Debug Java applications interactively using the JDK's built-in command-line debu
 ## Critical Rules for Agents
 
 1. **NEVER create files in the workspace** (no `bp.txt`, `cmds.txt`, wrapper scripts, etc.).
-   Use the inline CLI flags (`--bp`, `--cmd`, `--auto-inspect`) provided by the skill scripts.
+   Use the inline CLI flags (`--bp`, `--cmd`, `--auto-inspect`, `--timeout`) provided by the skill scripts.
 2. **ALWAYS use the skill scripts** in `scripts/`. Never write
    custom JDB wrapper scripts, FIFO-based launchers, or shell scripts to drive JDB.
 3. **Compile first, then debug.** Ensure classes are compiled before launching JDB.
@@ -233,6 +233,15 @@ The `--auto-inspect 20` flag automatically generates `run` + 20 cycles of
 `where`, `locals`, `cont` + `quit`. The output contains the full JDB session
 including stack traces, local variables, and exception details — ready for analysis.
 
+For applications that may hang or deadlock, add `--timeout <seconds>` to kill the
+JDB session after the specified time:
+```bash
+bash scripts/jdb-breakpoints.sh \
+  --mainclass com.example.MyClass \
+  --bp "catch java.lang.NullPointerException" \
+  --auto-inspect 10 --timeout 60
+```
+
 For custom commands, use `--cmd` flags instead of `--auto-inspect`:
 ```bash
 bash scripts/jdb-breakpoints.sh \
@@ -290,8 +299,11 @@ dump dataMap
 
 ## Important Notes
 
-- **NEVER create files in the workspace.** Use inline `--bp`, `--cmd`, and `--auto-inspect`
+- **NEVER create files in the workspace.** Use inline `--bp`, `--cmd`, `--auto-inspect`, and `--timeout`
   flags. The scripts handle all temp files internally in `/tmp/` and clean up after themselves.
+- **Use `--timeout` for potentially hanging apps.** Apps that deadlock or loop indefinitely
+  will block JDB forever. Add `--timeout 60` (or appropriate value) so the session is
+  automatically killed. The output will include a `TIMEOUT:` marker when triggered.
 - **Compile with `-g` for full debug info.** Without it, `locals` will show
   "Local variable information not available". Always compile with:
   `javac -g -d out src/main/java/com/example/MyClass.java`

@@ -81,6 +81,56 @@ For manual debugging and development, `prepare-test.sh` creates an isolated temp
 # Then follow the printed instructions to cd into the directory and launch an agent
 ```
 
+#### Interactive Testing with GitHub Copilot CLI (Recommended)
+
+Using the **JDB Debugger** agent with Copilot CLI produces faster results because it parallelizes debugging across sub-agents (`jdb-session`, `jdb-diagnostics`, `jdb-analyst`).
+
+**Step-by-step process:**
+
+1. **Run the prepare script** to compile the test scenarios and set up an isolated work directory:
+
+   ```bash
+   ./tests/prepare-test.sh
+   ```
+
+   The script will print the path to the temporary directory (e.g., `/tmp/jdb-test-XXXXXX`).
+
+2. **Change into the temporary directory:**
+
+   ```bash
+   cd /tmp/jdb-test-XXXXXX
+   ```
+
+3. **Launch the Copilot CLI:**
+
+   ```bash
+   copilot
+   ```
+
+4. **Select a model** using the `/model` command:
+
+   ```
+   /model
+   ```
+
+   Pick the model you want to use from the list.
+
+5. **Select the JDB Debugger agent** using the `/agent` command:
+
+   ```
+   /agent
+   ```
+
+   Select **JDB Debugger** from the list.
+
+6. **Run the prompt** by asking the agent to read and follow the test instructions:
+
+   ```
+   Read the prompt.txt file and follow the instructions.
+   ```
+
+   The agent will autonomously run each Java application, use JDB to debug them, and produce a `DEBUG-REPORT.md` with its findings.
+
 ### 5. Validation Logic
 
 The test harness checks the agent's `DEBUG-REPORT.md` against 5 expected bugs using keyword-based pattern matching. Each bug has a set of indicator patterns (e.g., `"nullpointerexception"`, `"clearhistory"`, `"trim"`). A bug is considered detected if a minimum number of its indicators appear in the report.
