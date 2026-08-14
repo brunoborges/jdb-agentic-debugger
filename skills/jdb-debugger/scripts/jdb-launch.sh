@@ -60,6 +60,8 @@ while [[ $# -gt 0 ]]; do
     --app-args)
       [[ $# -ge 2 ]] || { echo "Error: --app-args requires a value." >&2; exit 2; }
       APP_ARGS="$2"
+      read -r -a EXTRA_APP_ARGS <<< "$2"
+      POSITIONAL_APP_ARGS+=("${EXTRA_APP_ARGS[@]}")
       shift 2
       ;;
     --suspend)
@@ -144,12 +146,7 @@ if [[ -n "$JDB_ARGS" ]]; then
 fi
 CMD+=("$MAINCLASS")
 if [[ -n "$APP_ARGS" ]]; then
-  if (( ${#POSITIONAL_APP_ARGS[@]} > 0 )); then
-    CMD+=("${POSITIONAL_APP_ARGS[@]}")
-  else
-    read -r -a EXTRA_APP_ARGS <<< "$APP_ARGS"
-    CMD+=("${EXTRA_APP_ARGS[@]}")
-  fi
+  CMD+=("${POSITIONAL_APP_ARGS[@]}")
 fi
 
 exec "${CMD[@]}"

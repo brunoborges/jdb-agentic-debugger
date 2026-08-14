@@ -59,10 +59,13 @@ test_argument_safety() {
   make_fake_jdb
   local output
   output=$(PATH="$TMP_ROOT/bin:$PATH" "$SCRIPTS/jdb-launch.sh" Example \
-    --sourcepath "$TMP_ROOT/source path" --classpath "$TMP_ROOT/class path" "hello world")
+    --sourcepath "$TMP_ROOT/source path" --classpath "$TMP_ROOT/class path" \
+    --app-args "legacy arguments" "hello world")
   grep -Fq "<$TMP_ROOT/source path>" <<< "$output" &&
     grep -Fq "<$TMP_ROOT/class path>" <<< "$output" &&
     grep -Fq '<Example>' <<< "$output" &&
+    grep -Fq '<legacy>' <<< "$output" &&
+    grep -Fq '<arguments>' <<< "$output" &&
     grep -Fq '<hello world>' <<< "$output"
 }
 
