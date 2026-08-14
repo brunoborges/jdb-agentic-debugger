@@ -132,8 +132,9 @@ You click: [Debug interactively]
 
 ## Prerequisites
 
-- **JDK** installed (any version with `jdb` — JDK 8+)
-- **Bash** shell (Linux/macOS native, Windows via WSL)
+- **JDK 17, 21, or 25** with `java`, `javac`, and `jdb` on `PATH`
+- **Bash 3.2+** (Linux/macOS native, Windows via WSL 2)
+- Current stable GitHub Copilot CLI or Claude Code for agent workflows
 - For remote debugging: the target JVM must be started with JDWP:
   ```bash
   java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar myapp.jar
@@ -166,6 +167,20 @@ bash skills/jdb-debugger/scripts/jdb-breakpoints.sh \
 ## Benchmark Results
 
 See the [`results/`](results/) folder for benchmark comparisons between agent (parallel) and serial execution modes.
+
+Deterministic script and metadata checks run with `./tests/run-unit-tests.sh`.
+Authenticated agent evaluations are intentionally separate because results depend on
+the selected model and external CLI service. See [`tests/README.md`](tests/README.md).
+
+## Compatibility and support
+
+CI covers Linux and macOS with JDK 17, 21, and 25. Windows is supported through
+WSL 2 with a JDK installed inside WSL. Other JDK releases and shells may work but
+are not release-gating configurations. Remote JDWP attachment should use an
+authenticated tunnel or private network; JDWP must not be exposed publicly.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
+[RELEASING.md](RELEASING.md) for project policies.
 
 ## Blog Posts & Announcements
 

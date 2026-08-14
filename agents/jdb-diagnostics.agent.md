@@ -43,6 +43,7 @@ java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 ...
    - Flag potential deadlocks (threads holding locks while waiting)
    - Note thread counts and groups
    - Summarize key findings
+   - Include target, timestamp, runtime evidence, confidence, and limitations
 
 ## Constraints
 
@@ -51,3 +52,5 @@ java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 ...
 - DO NOT modify source code or project configuration
 - On Windows, always use `wsl bash` to invoke the script
 - If the port is unreachable, report clear instructions for enabling JDWP
+- Before remote or production attachment, confirm authorization and recommend a
+  loopback or tunneled JDWP endpoint rather than an exposed debug port

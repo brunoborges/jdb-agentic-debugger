@@ -15,14 +15,13 @@ User → JDB Debugger (orchestrator agent)
 
 - **`agents/`** — Agent definition files (`.agent.md`) for the orchestrator and 3 sub-agents. Referenced by `plugin.json`.
 - **`skills/jdb-debugger/`** — The JDB skill: `SKILL.md` (agent instructions), `scripts/` (4 Bash scripts), `references/` (JDB/JDWP docs).
-- **`jdb-debugger-agents/`** and **`jdb-debugger-skill/`** — Legacy mirrors of `agents/` and `skills/jdb-debugger/`. Must be kept in sync for VS Code Copilot and standalone skill users.
 - **`.claude-plugin/plugin.json`** — Claude Code plugin manifest. Points to agents in `agents/`.
 - **`tests/`** — Integration test framework that validates agents can autonomously debug intentionally buggy Java programs.
 
 ## Key Conventions
 
 - **Agents must never run raw `jdb` commands.** All JDB operations go through the 4 scripts in `skills/jdb-debugger/scripts/` (`jdb-launch.sh`, `jdb-attach.sh`, `jdb-breakpoints.sh`, `jdb-diagnostics.sh`).
-- **Agents must never create files in the workspace.** Use inline CLI flags (`--bp`, `--cmd`, `--auto-inspect`) instead of temp files for breakpoints or commands.
+- **Agents must never create helper or command files in the workspace.** Requested output artifacts such as `findings-*.md` and `DEBUG-REPORT.md` are allowed. Use inline CLI flags (`--bp`, `--cmd`, `--auto-inspect`) for debugger input.
 - **Agent files use YAML front matter** with fields: `name`, `description`, `tools`, and optionally `agents`/`handoffs`.
 - **The orchestrator (`jdb-debugger.agent.md`) never executes commands** — it only triages and delegates via handoffs.
 
@@ -49,6 +48,5 @@ Test scenarios are in `tests/scenarios/` — Java files with intentional bugs (s
 
 ## Editing Guidelines
 
-- When modifying agent or skill files, update both the canonical location (`agents/`, `skills/jdb-debugger/`) **and** the legacy mirrors (`jdb-debugger-agents/`, `jdb-debugger-skill/`).
 - Script changes must preserve the `--help` flag behavior and the existing CLI flag interface (`--bp`, `--cmd`, `--auto-inspect`, `--port`, `--host`, `--sourcepath`, `--classpath`, `--mainclass`).
 - The `plugin.json` manifest references agents by relative path from `.claude-plugin/` — keep paths consistent if renaming.

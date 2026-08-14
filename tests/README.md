@@ -61,6 +61,7 @@ The automated test runner orchestrates end-to-end testing:
 # Run with a specific agent
 ./tests/run-test.sh --agent copilot
 ./tests/run-test.sh --agent claude
+./tests/run-test.sh --agent copilot --runs 3
 
 # Additional options
 ./tests/run-test.sh --model <model>        # Override the LLM model
@@ -133,13 +134,16 @@ Using the **JDB Debugger** agent with Copilot CLI produces faster results becaus
 
 ### 5. Validation Logic
 
-The test harness checks the agent's `DEBUG-REPORT.md` against 5 expected bugs using keyword-based pattern matching. Each bug has a set of indicator patterns (e.g., `"nullpointerexception"`, `"clearhistory"`, `"trim"`). A bug is considered detected if a minimum number of its indicators appear in the report.
+The test harness checks the report against all 12 expected findings. Assertions are
+scenario-specific and combine symptom, runtime location/evidence, root-cause, and
+fix indicators rather than accepting one generic keyword. This remains an
+evaluation heuristic, so use repeated trials for model comparisons.
 
 | Result | Criteria |
 |--------|----------|
-| ✅ PASS | 5/5 bugs detected |
-| ⚠️ WARN | 3–4/5 bugs detected (acceptable) |
-| ❌ FAIL | < 3/5 bugs detected |
+| ✅ PASS | 12/12 findings detected |
+| ⚠️ WARN | 9–11/12 findings detected |
+| ❌ FAIL | < 9/12 findings detected |
 
 ### 6. Test Results (`test-results/`)
 
@@ -149,6 +153,12 @@ Each test run produces two files per agent, timestamped:
 |------|---------|
 | `DEBUG-REPORT-<agent>-<timestamp>.md` | The agent's actual output — a detailed bug report with root cause analysis for each bug found. This is the artifact being evaluated. |
 | `test-report-<agent>-<timestamp>.txt` | The harness's validation — shows PASS/FAIL per bug, indicator match counts, overall score, and run duration. |
+| `benchmark-<timestamp>.csv` | Machine-readable version, model, mode, score, and duration metadata. |
+
+Reports also record the commit, project version, JDK, agent CLI, model, plugin mode,
+and trial number. Use `--runs N` for repeated trials and `--no-plugin` for a
+baseline. The manual `Agent benchmark` workflow runs these evaluations on an
+authenticated self-hosted runner; normal CI only runs deterministic tests.
 
 ## Prerequisites
 
