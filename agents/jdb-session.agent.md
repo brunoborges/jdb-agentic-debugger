@@ -25,11 +25,11 @@ You MUST use the skill scripts to run JDB. NEVER invoke `jdb` directly. NEVER pi
 
 On Windows, always invoke via WSL:
 ```
+wsl bash scripts/<script>.sh [args]
+```
 
 Requested `findings-*.md` files are allowed output artifacts. Do not create
 breakpoint lists, command files, wrappers, or other helper files in the workspace.
-wsl bash scripts/<script>.sh [args]
-```
 
 ## PREFERRED: Batch Mode with --auto-inspect
 
