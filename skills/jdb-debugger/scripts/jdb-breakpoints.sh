@@ -266,6 +266,18 @@ if [[ "$IS_BATCH" == true ]]; then
 
   if [[ -n "$TIMEOUT" ]]; then
     # Run with timeout — kill the session if it exceeds the limit
+    terminate_tree() {
+      local parent="$1"
+      local signal="$2"
+      local child
+      if command -v pgrep &>/dev/null; then
+        while IFS= read -r child; do
+          [[ -z "$child" ]] || terminate_tree "$child" "$signal"
+        done < <(pgrep -P "$parent" 2>/dev/null || true)
+      fi
+      kill "-$signal" "$parent" 2>/dev/null || true
+    }
+
     TIMEOUT_MARKER=$(mktemp "${TMPDIR:-/tmp}/jdb-timeout-XXXXXX")
     rm -f "$TIMEOUT_MARKER"
     trap 'rm -f "$TIMEOUT_MARKER"' EXIT HUP INT TERM
@@ -307,9 +319,9 @@ if [[ "$IS_BATCH" == true ]]; then
         : > "$TIMEOUT_MARKER"
         echo ""
         echo "=== TIMEOUT: JDB session killed after ${TIMEOUT}s (app may be hanging/deadlocked) ==="
-        kill -TERM -- "-$BATCH_PID" 2>/dev/null || kill -TERM "$BATCH_PID" 2>/dev/null
+        terminate_tree "$BATCH_PID" TERM
         sleep 2
-        kill -KILL -- "-$BATCH_PID" 2>/dev/null || kill -KILL "$BATCH_PID" 2>/dev/null
+        terminate_tree "$BATCH_PID" KILL
       fi
     ) &
     TIMER_PID=$!

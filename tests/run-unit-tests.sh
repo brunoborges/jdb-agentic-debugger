@@ -96,14 +96,18 @@ test_timeout_status_and_cleanup() {
   cat > "$TMP_ROOT/slow-bin/jdb" <<'EOF'
 #!/usr/bin/env bash
 trap 'exit 143' TERM
+echo "$$" > "$FAKE_JDB_PID_FILE"
 sleep 10
 EOF
   chmod +x "$TMP_ROOT/slow-bin/jdb"
   expect_status 124 env PATH="$TMP_ROOT/slow-bin:$PATH" TMPDIR="$TMP_ROOT/temp" \
+    FAKE_JDB_PID_FILE="$TMP_ROOT/fake-jdb.pid" \
     JDB_BP_DELAY=0 JDB_RUN_DELAY=0 JDB_CMD_DELAY=0 JDB_CONT_DELAY=0 \
     "$SCRIPTS/jdb-breakpoints.sh" --mainclass Example --bp "catch java.lang.Exception" \
     --auto-inspect 1 --timeout 0.2 &&
-    ! find "$TMP_ROOT/temp" -type f -name 'jdb-*' | grep -q .
+    ! find "$TMP_ROOT/temp" -type f -name 'jdb-*' | grep -q . &&
+    [[ -s "$TMP_ROOT/fake-jdb.pid" ]] &&
+    ! kill -0 "$(cat "$TMP_ROOT/fake-jdb.pid")" 2>/dev/null
 }
 
 start_jdwp_fixture() {
