@@ -5,7 +5,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPTS="$REPO_ROOT/skills/jdb-debugger/scripts"
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/jdb-unit-XXXXXX")
-trap 'rm -rf "$TMP_ROOT"' EXIT HUP INT TERM
+FIXTURE_PID=""
+trap '[[ -z "$FIXTURE_PID" ]] || kill "$FIXTURE_PID" 2>/dev/null || true; rm -rf "$TMP_ROOT"' EXIT HUP INT TERM
 
 passed=0
 failed=0
@@ -58,10 +59,11 @@ test_argument_safety() {
   make_fake_jdb
   local output
   output=$(PATH="$TMP_ROOT/bin:$PATH" "$SCRIPTS/jdb-launch.sh" Example \
-    --sourcepath "$TMP_ROOT/source path" --classpath "$TMP_ROOT/class path")
+    --sourcepath "$TMP_ROOT/source path" --classpath "$TMP_ROOT/class path" "hello world")
   grep -Fq "<$TMP_ROOT/source path>" <<< "$output" &&
     grep -Fq "<$TMP_ROOT/class path>" <<< "$output" &&
-    grep -Fq '<Example>' <<< "$output"
+    grep -Fq '<Example>' <<< "$output" &&
+    grep -Fq '<hello world>' <<< "$output"
 }
 
 test_attach_arguments() {
@@ -104,6 +106,70 @@ EOF
     ! find "$TMP_ROOT/temp" -type f -name 'jdb-*' | grep -q .
 }
 
+start_jdwp_fixture() {
+  local main_class="$1"
+  local classpath="$2"
+  local log_file="$3"
+  java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:0 \
+    -cp "$classpath" "$main_class" >"$log_file" 2>&1 &
+  FIXTURE_PID=$!
+  FIXTURE_PORT=""
+  for _ in {1..50}; do
+    FIXTURE_PORT=$(sed -n 's/.*address: \([0-9][0-9]*\).*/\1/p' "$log_file" | head -1)
+    [[ -n "$FIXTURE_PORT" ]] && return 0
+    kill -0 "$FIXTURE_PID" 2>/dev/null || return 1
+    sleep 0.1
+  done
+  return 1
+}
+
+stop_jdwp_fixture() {
+  [[ -n "${FIXTURE_PID:-}" ]] || return 0
+  kill "$FIXTURE_PID" 2>/dev/null || true
+  wait "$FIXTURE_PID" 2>/dev/null || true
+  FIXTURE_PID=""
+}
+
+test_local_jdwp_diagnostics() {
+  local classes="$TMP_ROOT/jdwp classes"
+  mkdir -p "$classes"
+  javac --release 17 -g -d "$classes" "$REPO_ROOT/tests/scenarios/ThreadTest.java"
+  start_jdwp_fixture ThreadTest "$classes" "$TMP_ROOT/thread-fixture.log" || {
+    stop_jdwp_fixture
+    return 1
+  }
+  sleep 1
+  local output status
+  set +e
+  output=$("$SCRIPTS/jdb-diagnostics.sh" --host 127.0.0.1 --port "$FIXTURE_PORT" 2>&1)
+  status=$?
+  set -e
+  stop_jdwp_fixture
+  [[ "$status" -eq 0 ]] &&
+    grep -q 'test-t1' <<< "$output" &&
+    grep -q 'test-t2' <<< "$output"
+}
+
+test_exception_debugging() {
+  local classes="$TMP_ROOT/exception classes"
+  mkdir -p "$classes"
+  cat > "$TMP_ROOT/ExceptionFixture.java" <<'EOF'
+public class ExceptionFixture {
+    public static void main(String[] args) {
+        throw new IllegalStateException("fixture");
+    }
+}
+EOF
+  javac --release 17 -g -d "$classes" "$TMP_ROOT/ExceptionFixture.java"
+  local output
+  output=$(JDB_BP_DELAY=0.2 JDB_RUN_DELAY=1 JDB_CMD_DELAY=0.2 JDB_CONT_DELAY=0.2 \
+    "$SCRIPTS/jdb-breakpoints.sh" --mainclass ExceptionFixture \
+    --classpath "$classes" --bp "catch java.lang.IllegalStateException" \
+    --auto-inspect 1 --timeout 10 2>&1)
+  grep -q 'IllegalStateException' <<< "$output" &&
+    grep -q 'ExceptionFixture.main' <<< "$output"
+}
+
 test_metadata() {
   python3 "$REPO_ROOT/tests/validate-repository.py"
 }
@@ -115,6 +181,8 @@ run_test "attach preserves path arguments" test_attach_arguments
 run_test "diagnostics preserves jdb failure" test_diagnostics_status
 run_test "breakpoint batch preserves arguments" test_breakpoint_batch
 run_test "timeout returns 124 and cleans files" test_timeout_status_and_cleanup
+run_test "local JDWP diagnostics capture deadlocked threads" test_local_jdwp_diagnostics
+run_test "exception fixture is debugged from a spaced path" test_exception_debugging
 run_test "repository metadata is consistent" test_metadata
 
 echo "1..$((passed + failed))"

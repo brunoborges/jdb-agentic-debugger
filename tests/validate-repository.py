@@ -52,7 +52,7 @@ for agent in sorted((ROOT / "agents").glob("*.agent.md")):
         error(f"{agent.relative_to(ROOT)} missing fields: {sorted(missing)}")
 
 for relative in plugin.get("agents", []):
-    path = (ROOT / ".claude-plugin" / relative).resolve()
+    path = (ROOT / relative).resolve()
     if not path.is_file():
         error(f"plugin agent path does not exist: {relative}")
 

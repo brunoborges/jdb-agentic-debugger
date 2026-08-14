@@ -33,13 +33,13 @@ public class ClassLoaderConflictTest {
 
         Object a = classA.getDeclaredConstructor().newInstance();
 
-        IO.println("classA loader = " + classA.getClassLoader());
-        IO.println("classB loader = " + classB.getClassLoader());
-        IO.println("a.getClass()   = " + a.getClass());
+        System.out.println("classA loader = " + classA.getClassLoader());
+        System.out.println("classB loader = " + classB.getClassLoader());
+        System.out.println("a.getClass()   = " + a.getClass());
 
         try {
             Object b = classB.cast(a);
-            IO.println(b.toString());
+            System.out.println(b.toString());
         } catch (ClassCastException ex) {
         }
     }

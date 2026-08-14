@@ -34,6 +34,7 @@ SOURCEPATH=""
 CLASSPATH_ARG=""
 JDB_ARGS=""
 APP_ARGS=""
+declare -a POSITIONAL_APP_ARGS=()
 SUSPEND="y"
 
 while [[ $# -gt 0 ]]; do
@@ -61,15 +62,24 @@ while [[ $# -gt 0 ]]; do
       APP_ARGS="$2"
       shift 2
       ;;
+    --suspend)
+      SUSPEND="y"
+      shift
+      ;;
     --no-suspend)
       SUSPEND="n"
       shift
       ;;
     *)
       if [[ -z "$MAINCLASS" ]]; then
+        if [[ "$1" == -* ]]; then
+          echo "Error: Unknown option: $1" >&2
+          exit 2
+        fi
         MAINCLASS="$1"
       else
         APP_ARGS="${APP_ARGS:+$APP_ARGS }$1"
+        POSITIONAL_APP_ARGS+=("$1")
       fi
       shift
       ;;
@@ -134,8 +144,12 @@ if [[ -n "$JDB_ARGS" ]]; then
 fi
 CMD+=("$MAINCLASS")
 if [[ -n "$APP_ARGS" ]]; then
-  read -r -a EXTRA_APP_ARGS <<< "$APP_ARGS"
-  CMD+=("${EXTRA_APP_ARGS[@]}")
+  if (( ${#POSITIONAL_APP_ARGS[@]} > 0 )); then
+    CMD+=("${POSITIONAL_APP_ARGS[@]}")
+  else
+    read -r -a EXTRA_APP_ARGS <<< "$APP_ARGS"
+    CMD+=("${EXTRA_APP_ARGS[@]}")
+  fi
 fi
 
 exec "${CMD[@]}"
