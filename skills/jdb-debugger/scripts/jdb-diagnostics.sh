@@ -43,14 +43,17 @@ while [[ $# -gt 0 ]]; do
       usage
       ;;
     --host)
+      [[ $# -ge 2 ]] || { echo "Error: --host requires a value." >&2; exit 2; }
       HOST="$2"
       shift 2
       ;;
     --port)
+      [[ $# -ge 2 ]] || { echo "Error: --port requires a value." >&2; exit 2; }
       PORT="$2"
       shift 2
       ;;
     --output)
+      [[ $# -ge 2 ]] || { echo "Error: --output requires a value." >&2; exit 2; }
       OUTPUT="$2"
       shift 2
       ;;
@@ -73,6 +76,19 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ -z "$HOST" ]]; then
+  echo "Error: --host must not be empty." >&2
+  exit 2
+fi
+if [[ ! "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+  echo "Error: --port must be an integer from 1 to 65535." >&2
+  exit 2
+fi
+if ! $COLLECT_THREADS && ! $COLLECT_CLASSES; then
+  echo "Error: no diagnostics selected; enable --threads or --classes." >&2
+  exit 2
+fi
+
 # Verify jdb is available
 if ! command -v jdb &>/dev/null; then
   echo "Error: 'jdb' not found. Ensure the JDK is installed and on your PATH."
@@ -93,35 +109,35 @@ fi
 
 JDB_COMMANDS+="quit\n"
 
-# Create a temp file for JDB input
-TMPFILE=$(mktemp /tmp/jdb-diag-XXXXXX.txt)
-printf "$JDB_COMMANDS" > "$TMPFILE"
-
 HEADER="=== JVM Diagnostics ==="
 HEADER+="\nHost: ${HOST}:${PORT}"
 HEADER+="\nTimestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 HEADER+="\n========================\n"
 
 collect() {
-  printf "$HEADER"
+  printf '%b' "$HEADER"
   echo ""
 
-  # Run JDB with scripted input, with a timeout
+  # Run JDB with scripted input and preserve connection/timeout failures.
   if command -v timeout &>/dev/null; then
-    timeout 30 jdb -attach "${HOST}:${PORT}" < "$TMPFILE" 2>&1 || true
+    printf '%b' "$JDB_COMMANDS" | timeout 30 jdb -attach "${HOST}:${PORT}" 2>&1
   elif command -v gtimeout &>/dev/null; then
-    gtimeout 30 jdb -attach "${HOST}:${PORT}" < "$TMPFILE" 2>&1 || true
+    printf '%b' "$JDB_COMMANDS" | gtimeout 30 jdb -attach "${HOST}:${PORT}" 2>&1
   else
-    jdb -attach "${HOST}:${PORT}" < "$TMPFILE" 2>&1 || true
+    printf '%b' "$JDB_COMMANDS" | jdb -attach "${HOST}:${PORT}" 2>&1
   fi
 }
 
 if [[ -n "$OUTPUT" ]]; then
+  set +e
   collect > "$OUTPUT"
+  status=$?
+  set -e
+  if (( status != 0 )); then
+    echo "Error: diagnostics failed; partial output written to: $OUTPUT" >&2
+    exit "$status"
+  fi
   echo "Diagnostics written to: $OUTPUT"
 else
   collect
 fi
-
-# Cleanup
-rm -f "$TMPFILE"

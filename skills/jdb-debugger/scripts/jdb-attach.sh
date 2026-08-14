@@ -40,18 +40,22 @@ while [[ $# -gt 0 ]]; do
       usage
       ;;
     --host)
+      [[ $# -ge 2 ]] || { echo "Error: --host requires a value." >&2; exit 2; }
       HOST="$2"
       shift 2
       ;;
     --port)
+      [[ $# -ge 2 ]] || { echo "Error: --port requires a value." >&2; exit 2; }
       PORT="$2"
       shift 2
       ;;
     --sourcepath)
+      [[ $# -ge 2 ]] || { echo "Error: --sourcepath requires a value." >&2; exit 2; }
       SOURCEPATH="$2"
       shift 2
       ;;
     --jdb-args)
+      [[ $# -ge 2 ]] || { echo "Error: --jdb-args requires a value." >&2; exit 2; }
       JDB_ARGS="$2"
       shift 2
       ;;
@@ -61,6 +65,15 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ -z "$HOST" ]]; then
+  echo "Error: --host must not be empty." >&2
+  exit 2
+fi
+if [[ ! "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+  echo "Error: --port must be an integer from 1 to 65535." >&2
+  exit 2
+fi
 
 # Verify jdb is available
 if ! command -v jdb &>/dev/null; then
@@ -96,9 +109,12 @@ echo "Target: ${HOST}:${PORT}"
 echo "==================="
 echo ""
 
-# Build jdb command
-CMD="jdb -attach ${HOST}:${PORT}"
-[[ -n "$SOURCEPATH" ]] && CMD="$CMD -sourcepath ${SOURCEPATH}"
-[[ -n "$JDB_ARGS" ]] && CMD="$CMD $JDB_ARGS"
+# Build an argument-safe command.
+CMD=(jdb -attach "${HOST}:${PORT}")
+[[ -n "$SOURCEPATH" ]] && CMD+=(-sourcepath "$SOURCEPATH")
+if [[ -n "$JDB_ARGS" ]]; then
+  read -r -a EXTRA_JDB_ARGS <<< "$JDB_ARGS"
+  CMD+=("${EXTRA_JDB_ARGS[@]}")
+fi
 
-exec $CMD
+exec "${CMD[@]}"

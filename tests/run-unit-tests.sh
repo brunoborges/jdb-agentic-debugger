@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# Deterministic tests for scripts and repository metadata.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPTS="$REPO_ROOT/skills/jdb-debugger/scripts"
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/jdb-unit-XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT HUP INT TERM
+
+passed=0
+failed=0
+
+pass() { echo "ok - $1"; passed=$((passed + 1)); }
+fail() { echo "not ok - $1" >&2; failed=$((failed + 1)); }
+
+run_test() {
+  local name="$1"
+  shift
+  if "$@"; then pass "$name"; else fail "$name"; fi
+}
+
+expect_status() {
+  local expected="$1"
+  shift
+  set +e
+  "$@" >/dev/null 2>&1
+  local actual=$?
+  set -e
+  [[ "$actual" -eq "$expected" ]]
+}
+
+test_help() {
+  local script
+  for script in "$SCRIPTS"/*.sh; do
+    "$script" --help | grep -q '^Usage:'
+  done
+}
+
+test_validation() {
+  expect_status 2 "$SCRIPTS/jdb-attach.sh" --port nope &&
+    expect_status 2 "$SCRIPTS/jdb-diagnostics.sh" --port 70000 &&
+    expect_status 2 "$SCRIPTS/jdb-breakpoints.sh" --bp catch --auto-inspect 0 &&
+    expect_status 2 "$SCRIPTS/jdb-launch.sh" Main --classpath
+}
+
+make_fake_jdb() {
+  mkdir -p "$TMP_ROOT/bin"
+  cat > "$TMP_ROOT/bin/jdb" <<'EOF'
+#!/usr/bin/env bash
+printf '<%s>\n' "$@"
+cat >/dev/null || true
+exit "${FAKE_JDB_STATUS:-0}"
+EOF
+  chmod +x "$TMP_ROOT/bin/jdb"
+}
+
+test_argument_safety() {
+  make_fake_jdb
+  local output
+  output=$(PATH="$TMP_ROOT/bin:$PATH" "$SCRIPTS/jdb-launch.sh" Example \
+    --sourcepath "$TMP_ROOT/source path" --classpath "$TMP_ROOT/class path")
+  grep -Fq "<$TMP_ROOT/source path>" <<< "$output" &&
+    grep -Fq "<$TMP_ROOT/class path>" <<< "$output" &&
+    grep -Fq '<Example>' <<< "$output"
+}
+
+test_attach_arguments() {
+  make_fake_jdb
+  local output
+  output=$(PATH="$TMP_ROOT/bin:$PATH" "$SCRIPTS/jdb-attach.sh" \
+    --host localhost --port 5005 --sourcepath "$TMP_ROOT/source path")
+  grep -Fq '<localhost:5005>' <<< "$output" &&
+    grep -Fq "<$TMP_ROOT/source path>" <<< "$output"
+}
+
+test_diagnostics_status() {
+  make_fake_jdb
+  expect_status 7 env PATH="$TMP_ROOT/bin:$PATH" FAKE_JDB_STATUS=7 \
+    "$SCRIPTS/jdb-diagnostics.sh" --port 5005
+}
+
+test_breakpoint_batch() {
+  make_fake_jdb
+  local output
+  output=$(PATH="$TMP_ROOT/bin:$PATH" JDB_BP_DELAY=0 JDB_RUN_DELAY=0 \
+    JDB_CMD_DELAY=0 JDB_CONT_DELAY=0 "$SCRIPTS/jdb-breakpoints.sh" \
+    --mainclass Example --classpath "$TMP_ROOT/class path" \
+    --bp "catch java.lang.Exception" --auto-inspect 1)
+  grep -Fq "<$TMP_ROOT/class path>" <<< "$output" && grep -Fq '<Example>' <<< "$output"
+}
+
+test_timeout_status_and_cleanup() {
+  mkdir -p "$TMP_ROOT/slow-bin" "$TMP_ROOT/temp"
+  cat > "$TMP_ROOT/slow-bin/jdb" <<'EOF'
+#!/usr/bin/env bash
+trap 'exit 143' TERM
+sleep 10
+EOF
+  chmod +x "$TMP_ROOT/slow-bin/jdb"
+  expect_status 124 env PATH="$TMP_ROOT/slow-bin:$PATH" TMPDIR="$TMP_ROOT/temp" \
+    JDB_BP_DELAY=0 JDB_RUN_DELAY=0 JDB_CMD_DELAY=0 JDB_CONT_DELAY=0 \
+    "$SCRIPTS/jdb-breakpoints.sh" --mainclass Example --bp "catch java.lang.Exception" \
+    --auto-inspect 1 --timeout 0.2 &&
+    ! find "$TMP_ROOT/temp" -type f -name 'jdb-*' | grep -q .
+}
+
+test_metadata() {
+  python3 "$REPO_ROOT/tests/validate-repository.py"
+}
+
+run_test "all scripts expose help" test_help
+run_test "invalid arguments fail clearly" test_validation
+run_test "launch preserves path arguments" test_argument_safety
+run_test "attach preserves path arguments" test_attach_arguments
+run_test "diagnostics preserves jdb failure" test_diagnostics_status
+run_test "breakpoint batch preserves arguments" test_breakpoint_batch
+run_test "timeout returns 124 and cleans files" test_timeout_status_and_cleanup
+run_test "repository metadata is consistent" test_metadata
+
+echo "1..$((passed + failed))"
+echo "# passed: $passed; failed: $failed"
+(( failed == 0 ))
