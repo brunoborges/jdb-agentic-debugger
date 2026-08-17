@@ -17,6 +17,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=tests/test-helpers.sh
 source "$SCRIPT_DIR/test-helpers.sh"
 
 # --- Timing & Report ---
@@ -192,15 +193,14 @@ resolve_sources
 BASE_WORKDIR=$(make_temp_dir)
 log "Base work directory: $BASE_WORKDIR"
 
-cleanup() {
+trap '{
   if [[ "$VERBOSE" == true ]]; then
     warn "Keeping work directory for inspection: $BASE_WORKDIR"
   else
     rm -rf "$BASE_WORKDIR"
     log "Cleaned up $BASE_WORKDIR"
   fi
-}
-trap cleanup EXIT
+}' EXIT
 
 log "Compiling sample app with debug symbols..."
 compile_samples "$BASE_WORKDIR"
