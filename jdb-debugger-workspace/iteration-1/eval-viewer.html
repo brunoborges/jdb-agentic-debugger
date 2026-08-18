@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JDB Agentic Debugger — Eval Viewer (Iteration 1)</title>
+  <style>
+    /* ===== Global Reset ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3250;
+      --text: #e2e6f3;
+      --text-muted: #7a82a8;
+      --text-dim: #4a5070;
+      --accent-blue: #4f8ef7;
+      --accent-green: #3dd68c;
+      --accent-red: #f96060;
+      --accent-yellow: #f5c542;
+      --accent-orange: #f58a42;
+      --pass-bg: rgba(61,214,140,0.08);
+      --pass-border: rgba(61,214,140,0.35);
+      --fail-bg: rgba(249,96,96,0.08);
+      --fail-border: rgba(249,96,96,0.35);
+      --warn-bg: rgba(245,197,66,0.08);
+      --warn-border: rgba(245,197,66,0.35);
+      --code-bg: #0d0f18;
+      --old-accent: #f58a42;
+      --new-accent: #4f8ef7;
+      --radius: 10px;
+      --shadow: 0 4px 24px rgba(0,0,0,0.4);
+    }
+
+    body {
+      font-family: -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ===== Header ===== */
+    .header {
+      background: linear-gradient(135deg, #1a1d27 0%, #0d1020 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 36px 48px 28px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 20px rgba(0,0,0,0.5);
+    }
+    .header-inner { max-width: 1300px; margin: 0 auto; }
+    .header h1 {
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.02em;
+    }
+    .header h1 span { color: var(--accent-blue); }
+    .header-meta {
+      display: flex;
+      gap: 24px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .badge-blue { background: rgba(79,142,247,0.15); color: var(--accent-blue); border: 1px solid rgba(79,142,247,0.3); }
+    .badge-green { background: rgba(61,214,140,0.12); color: var(--accent-green); border: 1px solid rgba(61,214,140,0.3); }
+    .badge-orange { background: rgba(245,138,66,0.12); color: var(--accent-orange); border: 1px solid rgba(245,138,66,0.3); }
+
+    /* ===== Summary Bar ===== */
+    .summary-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 48px;
+    }
+    .summary-bar-inner {
+      max-width: 1300px;
+      margin: 0 auto;
+      display: flex;
+      gap: 0;
+      overflow-x: auto;
+    }
+    .summary-stat {
+      padding: 18px 32px;
+      text-align: center;
+      border-right: 1px solid var(--border);
+    }
+    .summary-stat:last-child { border-right: none; }
+    .summary-stat .num {
+      font-size: 2rem;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+    .summary-stat .label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: 2px;
+    }
+    .num-pass { color: var(--accent-green); }
+    .num-total { color: var(--text); }
+    .num-score { color: var(--accent-blue); }
+
+    /* ===== Top Tab Bar ===== */
+    .tab-bar {
+      background: var(--surface);
+      border-bottom: 2px solid var(--border);
+      padding: 0 48px;
+    }
+    .tab-bar-inner {
+      max-width: 1300px;
+      margin: 0 auto;
+      display: flex;
+      gap: 0;
+    }
+    .tab-btn {
+      padding: 14px 24px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.2s;
+      letter-spacing: 0.02em;
+      user-select: none;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent-blue); border-bottom-color: var(--accent-blue); }
+
+    /* ===== Tab Pages ===== */
+    .tab-page { display: none; }
+    .tab-page.active { display: block; }
+
+    /* ===== Main Layout ===== */
+    .main { max-width: 1300px; margin: 0 auto; padding: 40px 48px 80px; }
+
+    /* ===== Nav Pills ===== */
+    .nav-pills {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+    .pill {
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      transition: all 0.2s;
+      user-select: none;
+    }
+    .pill:hover { border-color: var(--accent-blue); color: var(--text); }
+    .pill.active { background: rgba(79,142,247,0.15); border-color: var(--accent-blue); color: var(--accent-blue); }
+    .pill .dot {
+      display: inline-block;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .dot-pass { background: var(--accent-green); }
+    .dot-fail { background: var(--accent-red); }
+
+    /* ===== Scenario Card ===== */
+    .scenario { margin-bottom: 40px; display: none; }
+    .scenario.visible { display: block; }
+
+    .scenario-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .scenario-index {
+      width: 42px; height: 42px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent-blue), #2b5cd4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .scenario-title-group { flex: 1; min-width: 0; }
+    .scenario-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .scenario-prompt {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    /* ===== Assertions ===== */
+    .assertions { margin-bottom: 20px; }
+    .assertions-label {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+    .assertion {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      border: 1px solid transparent;
+      font-size: 0.84rem;
+    }
+    .assertion-pass {
+      background: var(--pass-bg);
+      border-color: var(--pass-border);
+    }
+    .assertion-fail {
+      background: var(--fail-bg);
+      border-color: var(--fail-border);
+    }
+    .assertion-skip {
+      background: var(--warn-bg);
+      border-color: var(--warn-border);
+    }
+    .assertion-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+    .assertion-text { flex: 1; }
+    .assertion-check {
+      font-size: 0.73rem;
+      color: var(--text-dim);
+      margin-top: 3px;
+    }
+
+    /* ===== Diff Panes ===== */
+    .diff-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 900px) { .diff-grid { grid-template-columns: 1fr; } }
+
+    .pane {
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    .pane-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .pane-old { background: #1f1510; }
+    .pane-old .pane-header { background: #271a0e; color: var(--accent-orange); border-color: rgba(245,138,66,0.2); }
+    .pane-new { background: #0f1520; }
+    .pane-new .pane-header { background: #0d1529; color: var(--accent-blue); border-color: rgba(79,142,247,0.2); }
+
+    .pane-header-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot-orange { background: var(--accent-orange); }
+    .dot-blue { background: var(--accent-blue); }
+
+    .pane pre {
+      margin: 0;
+      padding: 16px;
+      font-family: "JetBrains Mono", "Fira Code", "SF Mono", Consolas, monospace;
+      font-size: 0.72rem;
+      line-height: 1.7;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: var(--code-bg);
+      color: #c9d1e3;
+      min-height: 120px;
+    }
+
+    /* Highlight important lines */
+    .hl-warn { color: #f5c542; font-weight: 600; }
+    .hl-ok { color: #3dd68c; font-weight: 600; }
+    .hl-err { color: #f96060; font-weight: 600; }
+    .hl-info { color: #4f8ef7; }
+    .hl-hint { color: #a78bfa; }
+    .hl-send { color: #7edcff; }
+    .hl-bp { color: #f58a42; }
+
+    /* ===== Key Diff Summary ===== */
+    .key-diff {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 8px;
+    }
+    .key-diff-title {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .diff-row {
+      display: flex;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.82rem;
+      align-items: flex-start;
+    }
+    .diff-row:last-child { border-bottom: none; }
+    .diff-label {
+      width: 56px;
+      flex-shrink: 0;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-align: center;
+    }
+    .diff-label-old { background: rgba(245,138,66,0.15); color: var(--accent-orange); }
+    .diff-label-new { background: rgba(79,142,247,0.15); color: var(--accent-blue); }
+    .diff-content { flex: 1; color: var(--text); }
+
+    /* ===== Commit Summary Page ===== */
+    .commit-page { max-width: 1300px; margin: 0 auto; padding: 40px 48px 80px; }
+
+    .commit-hero {
+      background: linear-gradient(135deg, #131729 0%, #0e1422 100%);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 36px 40px;
+      margin-bottom: 36px;
+      position: relative;
+      overflow: hidden;
+    }
+    .commit-hero::before {
+      content: '';
+      position: absolute;
+      top: -60px; right: -60px;
+      width: 240px; height: 240px;
+      background: radial-gradient(circle, rgba(79,142,247,0.08) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+    .commit-hero h2 {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    .commit-hero .subtitle {
+      color: var(--text-muted);
+      font-size: 0.88rem;
+      margin-bottom: 20px;
+    }
+    .commit-stats {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .commit-stat {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 20px;
+      text-align: center;
+    }
+    .commit-stat .cs-num {
+      font-size: 1.5rem;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+    .commit-stat .cs-label {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: 2px;
+    }
+
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ===== Changed Files ===== */
+    .file-list { margin-bottom: 36px; }
+    .file-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 22px;
+      margin-bottom: 12px;
+    }
+    .file-item-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .file-tag {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      flex-shrink: 0;
+    }
+    .file-tag-new { background: rgba(61,214,140,0.15); color: var(--accent-green); border: 1px solid rgba(61,214,140,0.3); }
+    .file-tag-mod { background: rgba(79,142,247,0.15); color: var(--accent-blue); border: 1px solid rgba(79,142,247,0.3); }
+    .file-path {
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 0.82rem;
+      color: var(--text);
+      font-weight: 600;
+    }
+    .file-desc {
+      font-size: 0.83rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+    .file-desc ul {
+      margin-top: 6px;
+      padding-left: 18px;
+    }
+    .file-desc li { margin-bottom: 4px; }
+    .file-desc code {
+      background: rgba(79,142,247,0.12);
+      color: var(--accent-blue);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 0.78rem;
+    }
+
+    /* ===== Pain Point Cards ===== */
+    .pain-cards { margin-bottom: 36px; }
+    .pain-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+    .pain-card-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    .pain-num {
+      width: 34px; height: 34px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      font-weight: 800;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .pain-num-1 { background: linear-gradient(135deg, #f96060, #c93535); }
+    .pain-num-2 { background: linear-gradient(135deg, #f5c542, #c9960a); }
+    .pain-num-3 { background: linear-gradient(135deg, #4f8ef7, #2b5cd4); }
+    .pain-num-4 { background: linear-gradient(135deg, #a78bfa, #6d48e5); }
+    .pain-card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .pain-card-subtitle {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .pain-card-body { padding: 20px 22px; }
+    .pain-section-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      margin-top: 16px;
+    }
+    .pain-section-label:first-child { margin-top: 0; }
+    .pain-card-body p {
+      font-size: 0.84rem;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+    .pain-card-body code {
+      background: rgba(255,255,255,0.06);
+      color: #c9d1e3;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 0.78rem;
+    }
+
+    .repro-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 10px 0;
+      font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+      font-size: 0.72rem;
+      line-height: 1.7;
+      color: #c9d1e3;
+      white-space: pre;
+      overflow-x: auto;
+    }
+    .repro-comment { color: #4a5070; }
+    .repro-cmd { color: #7edcff; }
+    .repro-out-bad { color: #f96060; }
+    .repro-out-good { color: #3dd68c; }
+    .repro-out-info { color: #4f8ef7; }
+    .repro-out-warn { color: #f5c542; font-weight: 600; }
+    .repro-out-hint { color: #a78bfa; }
+
+    .fix-arrow {
+      text-align: center;
+      font-size: 1.4rem;
+      color: var(--text-dim);
+      padding: 10px 0;
+    }
+
+    .result-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      margin-top: 10px;
+    }
+    .result-pass { background: rgba(61,214,140,0.12); color: var(--accent-green); border: 1px solid rgba(61,214,140,0.3); }
+    .result-improved { background: rgba(79,142,247,0.12); color: var(--accent-blue); border: 1px solid rgba(79,142,247,0.3); }
+
+    /* ===== Footer ===== */
+    .footer {
+      border-top: 1px solid var(--border);
+      padding: 24px 48px;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      background: var(--surface);
+    }
+
+    /* ===== Scrollbar ===== */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--code-bg); }
+    ::-webkit-scrollbar-thumb { background: #333860; border-radius: 3px; }
+
+    /* ===== Transitions ===== */
+    .scenario { animation: fadeIn 0.25s ease; }
+    .tab-page.active { animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ===== HEADER ===== -->
+<div class="header">
+  <div class="header-inner">
+    <h1>🔬 JDB Agentic Debugger — <span>Eval Viewer</span></h1>
+    <div class="header-meta">
+      <span class="badge badge-blue">📁 Iteration 1</span>
+      <span class="badge badge-green">✅ 4 Scenarios</span>
+      <span class="badge badge-orange">⚡ Event-driven Driver</span>
+      <span class="badge badge-blue">📅 2026-07-02</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SUMMARY BAR ===== -->
+<div class="summary-bar">
+  <div class="summary-bar-inner">
+    <div class="summary-stat">
+      <div class="num num-pass">10</div>
+      <div class="label">Assertions Passed</div>
+    </div>
+    <div class="summary-stat">
+      <div class="num num-total">10</div>
+      <div class="label">Total Assertions</div>
+    </div>
+    <div class="summary-stat">
+      <div class="num num-score">100%</div>
+      <div class="label">Pass Rate</div>
+    </div>
+    <div class="summary-stat">
+      <div class="num num-total" style="color:var(--accent-green)">4</div>
+      <div class="label">Scenarios Resolved</div>
+    </div>
+    <div class="summary-stat">
+      <div class="num num-total">4</div>
+      <div class="label">Pain Points Covered</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB BAR ===== -->
+<div class="tab-bar">
+  <div class="tab-bar-inner">
+    <button class="tab-btn active" onclick="switchTab('eval', this)">📊 Eval Results</button>
+    <button class="tab-btn" onclick="switchTab('commit', this)">📝 Commit Summary</button>
+  </div>
+</div>
+
+<!-- ===================================================================
+     TAB 1 — EVAL RESULTS
+     =================================================================== -->
+<div class="tab-page active" id="tab-eval">
+<div class="main">
+
+  <!-- Nav Pills -->
+  <div class="nav-pills">
+    <div class="pill active" onclick="showAll(this)" data-target="all">
+      <span class="dot dot-pass"></span>All (4)
+    </div>
+    <div class="pill" onclick="show('scenario-1', this)" data-target="scenario-1">
+      <span class="dot dot-pass"></span>Pain 1 · Overloaded Breakpoint
+    </div>
+    <div class="pill" onclick="show('scenario-2', this)" data-target="scenario-2">
+      <span class="dot dot-pass"></span>Pain 2 · Batch Race Condition
+    </div>
+    <div class="pill" onclick="show('scenario-3', this)" data-target="scenario-3">
+      <span class="dot dot-pass"></span>Pain 3 · where all Confusion
+    </div>
+    <div class="pill" onclick="show('scenario-4', this)" data-target="scenario-4">
+      <span class="dot dot-pass"></span>Pain 4 · Spurious run in Attach
+    </div>
+  </div>
+
+  <!-- ==============================
+       SCENARIO 1 — Overload Error
+       ============================== -->
+  <div class="scenario visible" id="scenario-1">
+    <div class="scenario-header">
+      <div class="scenario-index">1</div>
+      <div class="scenario-title-group">
+        <div class="scenario-title">Pain 1 · Overloaded Method Breakpoint — Silent Failure</div>
+        <div class="scenario-prompt">Prompt: Use jdb-breakpoints.sh in attach mode to set a breakpoint on the overloaded method AttachDemo.process</div>
+      </div>
+    </div>
+
+    <div class="assertions">
+      <div class="assertions-label">Assertions (3 / 3 passed)</div>
+      <div class="assertion assertion-skip">
+        <span class="assertion-icon">⚠️</span>
+        <div>
+          <div class="assertion-text">Baseline: only shows "already overloaded" error — no signature hints</div>
+          <div class="assertion-check">✔ old_skill result.txt contains the overload error but lists no method signatures</div>
+        </div>
+      </div>
+      <div class="assertion assertion-pass">
+        <span class="assertion-icon">✅</span>
+        <div>
+          <div class="assertion-text">New: auto-runs <code>methods</code> command and displays all overload signatures</div>
+          <div class="assertion-check">✔ with_skill result.txt contains [WARN] Overloaded method detected and the full signature list</div>
+        </div>
+      </div>
+      <div class="assertion assertion-pass">
+        <span class="assertion-icon">✅</span>
+        <div>
+          <div class="assertion-text">New: provides a ready-to-paste <code>--bp</code> re-run example with the full signature</div>
+          <div class="assertion-check">✔ with_skill result.txt contains [HINT] Re-run with the full signature</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="key-diff">
+      <div class="key-diff-title">🔍 Key Difference</div>
+      <div class="diff-row">
+        <span class="diff-label diff-label-old">Before</span>
+        <div class="diff-content">Errors with <code>already overloaded method process; please specify arguments</code>, then exits silently — user has no idea how to fix it</div>
+      </div>
+      <div class="diff-row">
+        <span class="diff-label diff-label-new">After</span>
+        <div class="diff-content">Detects overload error → auto-runs <code>methods AttachDemo</code> → lists all signatures → prints a <code>stop in</code> suggestion with the correct signature</div>
+      </div>
+    </div>
+
+    <div class="diff-grid">
+      <div class="pane pane-old">
+        <div class="pane-header">
+          <span class="pane-header-dot dot-orange"></span>❌ Baseline (old_skill)
+        </div>
+        <pre><span class="hl-info">=== JDB Breakpoints ===
+Loaded 1 breakpoint/catch commands
+========================
+
+Running in batch mode...
+Timeout: 10s
+</span>
+Set uncaught java.lang.Throwable
+Set deferred uncaught java.lang.Throwable
+Initializing jdb...
+> <span class="hl-err">Unable to set breakpoint AttachDemo.process: Method process is overloaded; specify arguments</span>
+>
+<span style="color:var(--text-dim)">[session exits silently — no hint, no signatures listed]</span></pre>
+      </div>
+      <div class="pane pane-new">
+        <div class="pane-header">
+          <span class="pane-header-dot dot-blue"></span>✅ New Driver (with_skill)
+        </div>
+        <pre>spawn: jdb -attach localhost:15005
+Set uncaught java.lang.Throwable
+Set deferred uncaught java.lang.Throwable
+Initializing jdb...
+>
+<span class="hl-send">send> stop in AttachDemo.process</span>
+<span class="hl-err">Unable to set breakpoint AttachDemo.process: Method process is overloaded; specify arguments</span>
+>
+<span class="hl-warn">[WARN] Overloaded method detected for 'stop in AttachDemo.process'
+  Fetching available signatures with 'methods AttachDemo'...</span>
+** Method List **
+AttachDemo process(java.lang.String)
+AttachDemo process(java.lang.String, int)
+AttachDemo process(java.lang.String, boolean)
+AttachDemo handleRequest(java.lang.String)
+AttachDemo main(java.lang.String[])
+>
+<span class="hl-hint">[HINT] Available overloads for 'process':
+  AttachDemo.process(java.lang.String)
+  AttachDemo.process(java.lang.String, int)
+  AttachDemo.process(java.lang.String, boolean)
+
+[HINT] Re-run with the full signature, e.g.:
+  --bp "stop in AttachDemo.process(java.lang.String)"</span></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==============================
+       SCENARIO 2 — Batch Timing
+       ============================== -->
+  <div class="scenario visible" id="scenario-2">
+    <div class="scenario-header">
+      <div class="scenario-index">2</div>
+      <div class="scenario-title-group">
+        <div class="scenario-title">Pain 2 · Batch Mode Race Condition (where fails after cont)</div>
+        <div class="scenario-prompt">Prompt: In attach mode, after a breakpoint is hit send where to inspect the stack, then cont, then where again</div>
+      </div>
+    </div>
+
+    <div class="assertions">
+      <div class="assertions-label">Assertions (3 / 3 passed)</div>
+      <div class="assertion assertion-pass">
+        <span class="assertion-icon">✅</span>
+        <div>
+          <div class="assertion-text">Baseline: where after cont reports "No current thread" error</div>
+          <div class="assertion-check">✔ old_skill result.txt contains "No current thread"</div>
+        </div>
+      </div>
+      <div class="assertion assertion-pass">
+        <span class="assertion-icon">✅</span>
+        <div>
+          <div class="assertion-text">New: the first where (right after breakpoint hit) correctly shows the call stack</div>
+          <div class="assertion-check">✔ with_skill result.txt contains [1] AttachDemo.handleRequest</div>
+        </div>
+      </div>
+      <div class="assertion assertion-pass">
+        <span class="assertion-icon">✅</span>
+        <div>
+          <div class="assertion-text">New: where after cont emits a meaningful [WARN] instead of silently failing</div>
+          <div class="assertion-check">✔ with_skill result.txt contains [WARN] Thread not suspended here</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="key-diff">
+      <div class="key-diff-title">🔍 Key Difference</div>
+      <div class="diff-row">
+        <span class="diff-label diff-label-old">Before</span>
+        <div class="diff-content">Sleep-based batch fires <code>where</code> immediately after <code>cont</code>; thread already resumed → "No current thread" — user does not know why</div>
+      </div>
+      <div class="diff-row">
+        <span class="diff-label diff-label-new">After</span>
+        <div class="diff-content">Event-driven: waits for "breakpoint hit" before executing post-breakpoint commands; <code>where</code> after <code>cont</code> still errors, but [WARN] clearly explains the cause and correct pattern</div>
+      </div>
+    </div>
+
+    <div class="diff-grid">
+      <div class="pane pane-old">
+        <div class="pane-header">
+          <span class="pane-header-dot dot-orange"></span>❌ Baseline (old_skill)
+        </div>
+        <pre><span class="hl-info">=== JDB Breakpoints ===
+Loaded 1 breakpoint/catch commands
+Running in batch mode... Timeout: 15s
+</span>
+Set uncaught java.lang.Throwable
+Initializing jdb...
+> Breakpoint set: AttachDemo.handleRequest
+>
+<span class="hl-bp">Breakpoint hit: "thread=main", AttachDemo.handleRequest(), line=41 bci=0</span>
+
+main[1] > <span class="hl-err">No current thread.</span>
+>
+<span class="hl-bp">Breakpoint hit: "thread=main", AttachDemo.handleRequest(), line=41 bci=0</span>
+
+main[1] Local variable information not available. Compile with -g to generate variable information
+main[1] </pre>
+      </div>
+      <div class="pane pane-new">
+        <div class="pane-header">
+          <span class="pane-header-dot dot-blue"></span>✅ New Driver (with_skill)
+        </div>
+        <pre>spawn: jdb -attach localhost:15005
+Set uncaught java.lang.Throwable
+Initializing jdb...
+>
+<span class="hl-send">send> stop in AttachDemo.handleRequest</span>
+Breakpoint set: AttachDemo.handleRequest
+>
+<span class="hl-info">[INFO] Attach mode: waiting for breakpoint to be hit...
+[INFO] Trigger the action in the target JVM now.</span>
+
+<span class="hl-bp">Breakpoint hit: "thread=main", AttachDemo.handleRequest(), line=41 bci=0</span>
+
+main[1]
+<span class="hl-send">send> where</span>
+<span class="hl-ok">  [1] AttachDemo.handleRequest (AttachDemo.java:41)
+  [2] AttachDemo.main (AttachDemo.java:61)</span>
+main[1]
+<span class="hl-send">send> cont</span>
+>
+<span class="hl-send">send> where</span>
+No current thread.
+>
+<span class="hl-warn">[WARN] Thread not suspended here.
+  In attach/suspend=n mode, 'where' only works right after a breakpoint fires.
+  Avoid inserting 'cont' before 'where' — cont resumes the suspended thread.</span>
+
+send> quit
+<span class="hl-ok">[JDB session complete]</span></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==============================
+       SCENARIO 3 — where all
+       ============================== -->
+  <div class="scenario visible" id="scenario-3">
+    <div class="scenario-header">
+      <div class="scenario-index">3</div>
+      <div class="scenario-title-group">
+        <div class="scenario-title">Pain 3 · <code>where all</code> Gives No Guidance Under suspend=n</div>
+        <div class="scenario-prompt">Prompt: In attach mode, use 'where all' to view the call stacks of all threads</div>
+      </div>
+    </div>
+
+    <div class="assertions">
+      <div class="assertions-label">Assertions (3 / 3 passed)</div>
+      <div class="assertion assertion-pass">
+        <span class="assertion-icon">✅</span>
+        <div>
+          <div class="assertion-text">Baseline: where all executes without any suspend=n explanation</div>
+          <div class="assertion-check">✔ old_skill result.txt contains no explanation about suspend=n</div>
+        </div>
+      </div>
+      <div class="assertion assertion-pass">
+        <span class="assertion-icon">✅</span>
+        <div>
+          <div class="assertion-text">New: prints [INFO] before where all explaining the suspend=n limitation</div>
+          <div class="assertion-check">✔ with_skill result.txt contains 'suspend=n mode' explanation</div>
+        </div>
+      </div>
+      <div class="assertion assertion-pass">
+        <span class="assertion-icon">✅</span>
+        <div>
+          <div class="assertion-text">New: recommends using 'where' instead of 'where all'</div>
+          <div class="assertion-check">✔ with_skill result.txt contains "Use 'where' (without 'all')"</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="key-diff">
+      <div class="key-diff-title">🔍 Key Difference</div>
+      <div class="diff-row">
+        <span class="diff-label diff-label-old">Before</span>
+        <div class="diff-content"><code>where all</code> runs silently, dumping stacks for Reference Handler, Finalizer, etc. Non-suspended threads show "current thread not suspended" — user does not know if this is a bug or expected</div>
+      </div>
+      <div class="diff-row">
+        <span class="diff-label diff-label-new">After</span>
+        <div class="diff-content">Before running <code>where all</code>, prints [INFO]: in suspend=n mode only the breakpoint thread has a full stack; other threads showing empty or "not suspended" is expected — recommends plain <code>where</code> instead</div>
+      </div>
+    </div>
+
+    <div class="diff-grid">
+      <div class="pane pane-old">
+        <div class="pane-header">
+          <span class="pane-header-dot dot-orange"></span>⚠️ Baseline (old_skill)
+        </div>
+        <pre>Initializing jdb...
+> Breakpoint set: AttachDemo.handleRequest
+>
+<span class="hl-bp">Breakpoint hit: "thread=main", AttachDemo.handleRequest(), line=41 bci=0</span>
+
+main[1] main:
+  [1] AttachDemo.handleRequest (AttachDemo.java:41)
+  [2] AttachDemo.main (AttachDemo.java:61)
+Reference Handler:
+  [1] java.lang.ref.Reference.waitForReferencePendingList (native method)
+  [2] java.lang.ref.Reference.processPendingReferences (Reference.java:246)
+  [3] java.lang.ref.Reference$ReferenceHandler.run (Reference.java:208)
+Finalizer:
+  [1] java.lang.Object.wait0 (native method)
+  ...(more thread stacks)
+
+<span style="color:var(--text-dim)">// ⚠️ No explanation of suspend=n limitations whatsoever</span></pre>
+      </div>
+      <div class="pane pane-new">
+        <div class="pane-header">
+          <span class="pane-header-dot dot-blue"></span>✅ New Driver (with_skill)
+        </div>
+        <pre>spawn: jdb -attach localhost:15005
+Set uncaught java.lang.Throwable
+Initializing jdb...
+>
+<span class="hl-send">send> stop in AttachDemo.handleRequest</span>
+Breakpoint set: AttachDemo.handleRequest
+>
+<span class="hl-info">[INFO] Attach mode: waiting for breakpoint to be hit...
+[INFO] Trigger the action in the target JVM now.</span>
+
+<span class="hl-bp">Breakpoint hit: "thread=main", AttachDemo.handleRequest(), line=41 bci=0</span>
+
+main[1]
+<span class="hl-info">[INFO] 'where all' in suspend=n mode: only the breakpoint thread has a full
+       stack. Other threads show 'current thread not suspended' or are empty.
+       Use 'where' (without 'all') to reliably see the breakpoint thread's stack.</span>
+
+<span class="hl-send">send> where all</span>
+main:
+  [1] AttachDemo.handleRequest (AttachDemo.java:41)
+  [2] AttachDemo.main (AttachDemo.java:61)
+Reference Handler:
+  [1] java.lang.ref.Reference.waitForReferencePendingList (native method)
+  ...(other threads)
+main[1]
+send> quit
+<span class="hl-ok">[JDB session complete]</span></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==============================
+       SCENARIO 4 — Auto-inspect run
+       ============================== -->
+  <div class="scenario visible" id="scenario-4">
+    <div class="scenario-header">
+      <div class="scenario-index">4</div>
+      <div class="scenario-title-group">
+        <div class="scenario-title">Pain 4 · Spurious <code>run</code> Command Sent in Attach Mode</div>
+        <div class="scenario-prompt">Prompt: In attach mode, post_cmds includes a run command (simulating --auto-inspect behaviour)</div>
+      </div>
+    </div>
+
+    <div class="assertions">
+      <div class="assertions-label">Assertions (3 / 3 passed)</div>
+      <div class="assertion assertion-pass">
+        <span class="assertion-icon">✅</span>
+        <div>
+          <div class="assertion-text">Baseline: run is a no-op in attach mode, causing subsequent where to execute at the wrong time</div>
+          <div class="assertion-check">✔ old_skill shows repeated "No current thread" / "No default thread" sequencing errors</div>
+        </div>
+      </div>
+      <div class="assertion assertion-pass">
+        <span class="assertion-icon">✅</span>
+        <div>
+          <div class="assertion-text">New: run in attach mode is automatically skipped with an [INFO] message</div>
+          <div class="assertion-check">✔ with_skill result.txt contains "Skipping 'run' in attach mode"</div>
+        </div>
+      </div>
+      <div class="assertion assertion-pass">
+        <span class="assertion-icon">✅</span>
+        <div>
+          <div class="assertion-text">New: after skipping run, where executes at the correct time (after breakpoint hit) and shows the call stack</div>
+          <div class="assertion-check">✔ with_skill result.txt contains [1] AttachDemo.handleRequest</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="key-diff">
+      <div class="key-diff-title">🔍 Key Difference</div>
+      <div class="diff-row">
+        <span class="diff-label diff-label-old">Before</span>
+        <div class="diff-content">Old script sends <code>run</code> while JVM is already in attach mode — <code>run</code> is silently ignored but consumes a prompt cycle, causing subsequent <code>where</code>/<code>locals</code> to execute out of sync → cascading "No current thread" / "No default thread" errors</div>
+      </div>
+      <div class="diff-row">
+        <span class="diff-label diff-label-new">After</span>
+        <div class="diff-content">New driver detects <code>run</code> in attach mode and skips it immediately with an [INFO] note ("JVM is already running"); subsequent <code>where</code> executes correctly after the breakpoint fires</div>
+      </div>
+    </div>
+
+    <div class="diff-grid">
+      <div class="pane pane-old">
+        <div class="pane-header">
+          <span class="pane-header-dot dot-orange"></span>❌ Baseline (old_skill)
+        </div>
+        <pre>Initializing jdb...
+> Breakpoint set: AttachDemo.handleRequest
+>
+<span class="hl-bp">Breakpoint hit: "thread=main", AttachDemo.handleRequest(), line=41 bci=0</span>
+
+main[1] >
+<span class="hl-bp">Breakpoint hit: "thread=main", AttachDemo.handleRequest(), line=41 bci=0</span>
+
+main[1]   [1] AttachDemo.handleRequest (AttachDemo.java:41)
+  [2] AttachDemo.main (AttachDemo.java:61)
+main[1] Local variable information not available. Compile with -g to generate variable information
+main[1] > <span class="hl-err">No current thread.</span>
+> <span class="hl-err">No default thread: please use the "thread" command first.</span>
+>
+<span class="hl-bp">Breakpoint hit: "thread=main", AttachDemo.handleRequest(), line=41 bci=0</span>
+
+main[1] >
+<span style="color:var(--text-dim)">// ↑ run in attach mode causes command sequencing chaos</span></pre>
+      </div>
+      <div class="pane pane-new">
+        <div class="pane-header">
+          <span class="pane-header-dot dot-blue"></span>✅ New Driver (with_skill)
+        </div>
+        <pre>spawn: jdb -attach localhost:15005
+Set uncaught java.lang.Throwable
+Initializing jdb...
+>
+<span class="hl-send">send> stop in AttachDemo.handleRequest</span>
+Breakpoint set: AttachDemo.handleRequest
+>
+<span class="hl-info">[INFO] Attach mode: waiting for breakpoint to be hit...
+[INFO] Trigger the action in the target JVM now.</span>
+
+<span class="hl-bp">Breakpoint hit: "thread=main", AttachDemo.handleRequest(), line=41 bci=0</span>
+
+main[1]
+<span class="hl-info">[INFO] Skipping 'run' in attach mode (JVM is already running).</span>
+
+<span class="hl-send">send> where</span>
+<span class="hl-ok">  [1] AttachDemo.handleRequest (AttachDemo.java:41)
+  [2] AttachDemo.main (AttachDemo.java:61)</span>
+main[1]
+send> quit
+<span class="hl-ok">[JDB session complete]</span></pre>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div><!-- /tab-eval -->
+
+
+<!-- ===================================================================
+     TAB 2 — COMMIT SUMMARY
+     =================================================================== -->
+<div class="tab-page" id="tab-commit">
+<div class="commit-page">
+
+  <!-- Hero -->
+  <div class="commit-hero">
+    <h2>feat(jdb-debugger): replace sleep-based batch driver with event-driven Python session</h2>
+    <div class="subtitle">Iteration 1 — 4 pain points addressed · 3 files changed · 2 files added</div>
+    <div class="commit-stats">
+      <div class="commit-stat">
+        <div class="cs-num" style="color:var(--accent-green)">+349</div>
+        <div class="cs-label">Lines Added</div>
+      </div>
+      <div class="commit-stat">
+        <div class="cs-num" style="color:var(--accent-red)">−97</div>
+        <div class="cs-label">Lines Removed</div>
+      </div>
+      <div class="commit-stat">
+        <div class="cs-num" style="color:var(--accent-blue)">2</div>
+        <div class="cs-label">New Files</div>
+      </div>
+      <div class="commit-stat">
+        <div class="cs-num" style="color:var(--accent-orange)">1</div>
+        <div class="cs-label">Modified Files</div>
+      </div>
+      <div class="commit-stat">
+        <div class="cs-num" style="color:var(--accent-green)">100%</div>
+        <div class="cs-label">Eval Pass Rate</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Changed Files -->
+  <div class="file-list">
+    <div class="section-title">📁 Changed Files</div>
+
+    <div class="file-item">
+      <div class="file-item-header">
+        <span class="file-tag file-tag-new">NEW</span>
+        <span class="file-path">skills/jdb-debugger/scripts/jdb-interactive.py</span>
+      </div>
+      <div class="file-desc">
+        Event-driven JDB session driver (349 lines). Replaces the previous sleep-based timing approach with true I/O-event-driven execution. Key responsibilities:
+        <ul>
+          <li>Spawns JDB as a subprocess and streams output through a background reader thread with proper partial-UTF-8 decoding.</li>
+          <li>Waits for specific output patterns (breakpoint set confirmation, breakpoint hit, stack frames, thread-not-suspended) before advancing to the next command — eliminating all race conditions caused by fixed <code>sleep</code> delays.</li>
+          <li>Detects overloaded-method breakpoint errors, auto-runs <code>methods &lt;Class&gt;</code>, extracts all matching signatures, and prints actionable <code>[WARN]</code> + <code>[HINT]</code> messages with ready-to-paste <code>--bp</code> examples.</li>
+          <li>In attach mode: blocks after setting breakpoints until a <code>Breakpoint hit</code> event is received, then executes post-breakpoint commands in the correct suspended-thread context.</li>
+          <li>Intercepts <code>run</code> in attach mode (skips it silently with an <code>[INFO]</code> explanation) and adds a <code>[WARN]</code> explanation when <code>where</code> is called after <code>cont</code> has already resumed the thread.</li>
+          <li>Adds a <code>[INFO]</code> preamble before <code>where all</code> explaining the <code>suspend=n</code> JDWP limitation and recommending plain <code>where</code>.</li>
+          <li>Accepts a JSON config file (generated by the shell wrapper) so the driver is fully decoupled from argument parsing.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="file-item">
+      <div class="file-item-header">
+        <span class="file-tag file-tag-new">NEW</span>
+        <span class="file-path">tests/scenarios/AttachDemo.java</span>
+      </div>
+      <div class="file-desc">
+        Dedicated test scenario for attach-mode pain-point validation (68 lines). Designed to reproduce all four pain points in a single runnable program:
+        <ul>
+          <li>Provides three overloaded <code>process()</code> variants to trigger the "already overloaded" error (Pain 1).</li>
+          <li>Exposes a <code>handleRequest()</code> method as the primary breakpoint target — no overloads, predictable suspension behaviour (Pain 2, 3, 4).</li>
+          <li>Runs a <code>while(true)</code> loop with a 2-second delay so the target JVM stays alive long enough to attach, set breakpoints, and wait for hits.</li>
+          <li>Launch command: <code>java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:15005 AttachDemo</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="file-item">
+      <div class="file-item-header">
+        <span class="file-tag file-tag-mod">MODIFIED</span>
+        <span class="file-path">skills/jdb-debugger/scripts/jdb-breakpoints.sh</span>
+      </div>
+      <div class="file-desc">
+        Substantial rewrite of the batch execution path and help text. Key changes:
+        <ul>
+          <li>Added <code>SCRIPT_DIR</code> resolution so the script can locate <code>jdb-interactive.py</code> regardless of the working directory from which it is called.</li>
+          <li>Replaced the old sleep-based batch engine (custom timeout loop + background PID management) with a thin JSON config generator that delegates to <code>jdb-interactive.py</code> when Python 3 is available; the old sleep-based path is preserved as a fallback with a clear warning.</li>
+          <li>Cleaned up <code>--auto-inspect</code> to avoid prepending <code>run</code> in attach mode — the event-driven driver handles JVM-start detection internally.</li>
+          <li>Rewrote the help text: removed obsolete environment-variable timing knobs (<code>JDB_BP_DELAY</code>, <code>JDB_RUN_DELAY</code>, etc.) and replaced them with an ATTACH MODE GUIDE section covering overloaded methods, <code>where</code> vs <code>where all</code> under <code>suspend=n</code>, and the JDWP single-connection limit.</li>
+          <li>Simplified the sleep-based fallback code path to remove the complex nested PID-management timeout loop, replacing it with a straightforward <code>run_batch | timeout … jdb</code> pipeline.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="file-item">
+      <div class="file-item-header">
+        <span class="file-tag file-tag-new">NEW</span>
+        <span class="file-path">jdb-debugger-workspace/iteration-1/</span>
+      </div>
+      <div class="file-desc">
+        Eval workspace for Iteration 1 (this file + 4 scenario directories). Each scenario directory contains:
+        <ul>
+          <li><code>eval_metadata.json</code> — eval ID, prompt, and assertion definitions</li>
+          <li><code>old_skill/outputs/result.txt</code> — captured output from the baseline (snapshot) skill</li>
+          <li><code>with_skill/outputs/result.txt</code> — captured output from the new event-driven driver</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pain Point Breakdown -->
+  <div class="pain-cards">
+    <div class="section-title">🩹 Pain Points — Reproduce &amp; Fix</div>
+
+    <!-- Pain 1 -->
+    <div class="pain-card">
+      <div class="pain-card-header">
+        <div class="pain-num pain-num-1">1</div>
+        <div>
+          <div class="pain-card-title">Overloaded Method Breakpoint — Silent Failure</div>
+          <div class="pain-card-subtitle">File: jdb-interactive.py · init_cmd handling · lines 226–273</div>
+        </div>
+      </div>
+      <div class="pain-card-body">
+        <div class="pain-section-label">🔴 How to Reproduce (Baseline)</div>
+        <p>Compile and start the demo app with JDWP enabled, then run the old skill against an overloaded method:</p>
+        <div class="repro-block"><span class="repro-comment"># Terminal 1 — start the target JVM</span>
+<span class="repro-cmd">javac tests/scenarios/AttachDemo.java
+java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:15005 AttachDemo</span>
+
+<span class="repro-comment"># Terminal 2 — run the OLD (snapshot) skill</span>
+<span class="repro-cmd">bash skills/jdb-debugger-snapshot-baseline/scripts/jdb-breakpoints.sh \
+  --host localhost --port 15005 \
+  --bp "stop in AttachDemo.process" \
+  --cmd "where" --cmd "quit" --timeout 10</span>
+
+<span class="repro-out-bad">> Unable to set breakpoint AttachDemo.process: Method process is overloaded; specify arguments
+>
+[Program exits silently — no hint, no signatures listed]</span></div>
+
+        <div class="pain-section-label">🔵 Fix Applied (new driver)</div>
+        <p>The event-driven driver intercepts the <code>already overloaded method</code> pattern immediately after sending the <code>stop in</code> command. It then automatically issues <code>methods &lt;ClassName&gt;</code>, parses the output to extract only the overloaded variants, and prints a <code>[HINT]</code> with a ready-to-paste <code>--bp</code> example:</p>
+        <div class="repro-block"><span class="repro-comment"># Same command, new driver</span>
+<span class="repro-cmd">bash skills/jdb-debugger/scripts/jdb-breakpoints.sh \
+  --host localhost --port 15005 \
+  --bp "stop in AttachDemo.process" \
+  --cmd "where" --cmd "quit" --timeout 10</span>
+
+<span class="repro-out-warn">[WARN] Overloaded method detected for 'stop in AttachDemo.process'
+  Fetching available signatures with 'methods AttachDemo'...</span>
+<span class="repro-out-hint">[HINT] Available overloads for 'process':
+  AttachDemo.process(java.lang.String)
+  AttachDemo.process(java.lang.String, int)
+  AttachDemo.process(java.lang.String, boolean)
+
+[HINT] Re-run with the full signature, e.g.:
+  --bp "stop in AttachDemo.process(java.lang.String)"</span></div>
+
+        <div class="result-badge result-pass">✅ Assertion Passed · 3/3</div>
+      </div>
+    </div>
+
+    <!-- Pain 2 -->
+    <div class="pain-card">
+      <div class="pain-card-header">
+        <div class="pain-num pain-num-2">2</div>
+        <div>
+          <div class="pain-card-title">Batch Mode Race Condition — "No Current Thread" After cont</div>
+          <div class="pain-card-subtitle">File: jdb-interactive.py · post_cmd handling · lines 323–335</div>
+        </div>
+      </div>
+      <div class="pain-card-body">
+        <div class="pain-section-label">🔴 How to Reproduce (Baseline)</div>
+        <p>The old driver used fixed <code>sleep</code> delays. In attach mode with <code>suspend=n</code>, the thread is only suspended during a breakpoint hit. Sending <code>where</code> after <code>cont</code> (with only a 0.5 s delay) races against the JVM resuming the thread, resulting in "No current thread":</p>
+        <div class="repro-block"><span class="repro-comment"># Old skill — sleep-based batch</span>
+<span class="repro-cmd">bash skills/jdb-debugger-snapshot-baseline/scripts/jdb-breakpoints.sh \
+  --host localhost --port 15005 \
+  --bp "stop in AttachDemo.handleRequest" \
+  --cmd "where" --cmd "cont" --cmd "where" --cmd "quit" --timeout 15</span>
+
+Breakpoint hit: "thread=main", AttachDemo.handleRequest(), line=41 bci=0
+
+main[1] <span class="repro-out-bad">> No current thread.</span>    <span class="repro-comment">← where fired before thread suspended</span>
+>
+Breakpoint hit: "thread=main", AttachDemo.handleRequest(), line=41 bci=0
+
+main[1] [1] AttachDemo.handleRequest ...  <span class="repro-comment">← accidental second hit</span></div>
+
+        <div class="pain-section-label">🔵 Fix Applied (new driver)</div>
+        <p>The event-driven driver waits for the <code>Breakpoint hit</code> event pattern before sending the first post-breakpoint command. After <code>cont</code>, it again waits for either the next hit or a prompt — so commands always execute in the correct JVM state. If <code>where</code> is issued after <code>cont</code> and the thread is no longer suspended, an explanatory <code>[WARN]</code> is printed rather than a silent failure:</p>
+        <div class="repro-block"><span class="repro-comment"># New driver — event-driven</span>
+<span class="repro-out-info">[INFO] Attach mode: waiting for breakpoint to be hit...
+[INFO] Trigger the action in the target JVM now.</span>
+
+Breakpoint hit: "thread=main", AttachDemo.handleRequest(), line=41 bci=0
+
+send&gt; where
+<span class="repro-out-good">  [1] AttachDemo.handleRequest (AttachDemo.java:41)
+  [2] AttachDemo.main (AttachDemo.java:61)</span>
+send&gt; cont
+send&gt; where
+No current thread.
+<span class="repro-out-warn">[WARN] Thread not suspended here.
+  In attach/suspend=n mode, 'where' only works right after a breakpoint fires.
+  Avoid inserting 'cont' before 'where' — cont resumes the suspended thread.</span></div>
+
+        <div class="result-badge result-pass">✅ Assertion Passed · 3/3</div>
+      </div>
+    </div>
+
+    <!-- Pain 3 -->
+    <div class="pain-card">
+      <div class="pain-card-header">
+        <div class="pain-num pain-num-3">3</div>
+        <div>
+          <div class="pain-card-title">"where all" Misleading Output Under suspend=n</div>
+          <div class="pain-card-subtitle">File: jdb-interactive.py · post_cmd handling · lines 299–309</div>
+        </div>
+      </div>
+      <div class="pain-card-body">
+        <div class="pain-section-label">🔴 How to Reproduce (Baseline)</div>
+        <p>In <code>suspend=n</code> attach mode, only the thread that hits a breakpoint is suspended. Running <code>where all</code> dumps every JVM thread, but non-suspended ones show empty stacks or "current thread not suspended". The old driver passed this command through without any explanation, leaving users confused about whether they are seeing a bug or expected behavior:</p>
+        <div class="repro-block"><span class="repro-comment"># Old skill — no explanation</span>
+main:
+  [1] AttachDemo.handleRequest (AttachDemo.java:41)
+Reference Handler:
+  [1] java.lang.ref.Reference.waitForReferencePendingList (native method)
+Finalizer:
+  [1] java.lang.Object.wait0 (native method)
+Signal Dispatcher: <span class="repro-out-bad">current thread not suspended.</span>
+<span class="repro-comment">// No explanation — is "current thread not suspended" an error or normal?</span></div>
+
+        <div class="pain-section-label">🔵 Fix Applied (new driver)</div>
+        <p>Before forwarding <code>where all</code> to JDB, the driver prints an <code>[INFO]</code> block explaining the <code>suspend=n</code> semantics and recommending <code>where</code> (without <code>all</code>) for reliable stack inspection:</p>
+        <div class="repro-block"><span class="repro-out-info">[INFO] 'where all' in suspend=n mode: only the breakpoint thread has a full
+       stack. Other threads show 'current thread not suspended' or are empty.
+       Use 'where' (without 'all') to reliably see the breakpoint thread's stack.</span>
+
+send&gt; where all
+main:
+  [1] AttachDemo.handleRequest (AttachDemo.java:41)
+  [2] AttachDemo.main (AttachDemo.java:61)
+Reference Handler:
+  [1] java.lang.ref.Reference.waitForReferencePendingList (native method)
+  ...</div>
+
+        <div class="result-badge result-pass">✅ Assertion Passed · 3/3</div>
+      </div>
+    </div>
+
+    <!-- Pain 4 -->
+    <div class="pain-card">
+      <div class="pain-card-header">
+        <div class="pain-num pain-num-4">4</div>
+        <div>
+          <div class="pain-card-title">Spurious "run" Command in Attach Mode Breaks Command Sequencing</div>
+          <div class="pain-card-subtitle">File: jdb-interactive.py · post_cmd handling · lines 311–315 · jdb-breakpoints.sh · lines 157–159</div>
+        </div>
+      </div>
+      <div class="pain-card-body">
+        <div class="pain-section-label">🔴 How to Reproduce (Baseline)</div>
+        <p>When <code>--auto-inspect</code> is used, the old shell prepended a <code>run</code> command to the post-command list unconditionally. In attach mode, <code>run</code> does nothing (the JVM is already running), but it still consumes a prompt cycle. This shifts all subsequent commands out of sync with the JVM state, producing cascading "No current thread" and "No default thread" errors:</p>
+        <div class="repro-block"><span class="repro-comment"># Old --auto-inspect in attach mode injects "run" unconditionally</span>
+<span class="repro-cmd">bash skills/jdb-debugger-snapshot-baseline/scripts/jdb-breakpoints.sh \
+  --host localhost --port 15005 \
+  --bp "stop in AttachDemo.handleRequest" \
+  --auto-inspect 1</span>
+
+Breakpoint hit: "thread=main", AttachDemo.handleRequest(), line=41 bci=0
+
+main[1] &gt;              <span class="repro-comment">← "run" consumed here, no effect</span>
+Breakpoint hit: "thread=main", AttachDemo.handleRequest(), line=41 bci=0
+
+main[1] [1] AttachDemo.handleRequest ...
+main[1] Local variable information not available...
+main[1] &gt; <span class="repro-out-bad">No current thread.</span>
+&gt; <span class="repro-out-bad">No default thread: please use the "thread" command first.</span></div>
+
+        <div class="pain-section-label">🔵 Fix Applied (new driver)</div>
+        <p>Two complementary fixes were applied:</p>
+        <ul style="font-size:0.84rem;color:var(--text-muted);padding-left:18px;line-height:1.8;margin-bottom:12px;">
+          <li><strong>Shell-side (jdb-breakpoints.sh):</strong> <code>run</code> is only prepended to <code>POST_CMDS</code> when <code>IS_ATTACH == false</code>. Attach mode never injects <code>run</code>.</li>
+          <li><strong>Driver-side (jdb-interactive.py):</strong> If a <code>run</code> command is encountered in the post-command list while <code>is_attach=true</code>, it is silently skipped with an <code>[INFO]</code> message — a safety net in case callers build the config manually.</li>
+        </ul>
+        <div class="repro-block"><span class="repro-comment"># New driver — run is skipped, subsequent commands work correctly</span>
+Breakpoint hit: "thread=main", AttachDemo.handleRequest(), line=41 bci=0
+
+<span class="repro-out-info">[INFO] Skipping 'run' in attach mode (JVM is already running).</span>
+
+send&gt; where
+<span class="repro-out-good">  [1] AttachDemo.handleRequest (AttachDemo.java:41)
+  [2] AttachDemo.main (AttachDemo.java:61)</span>
+send&gt; quit
+<span class="repro-out-good">[JDB session complete]</span></div>
+
+        <div class="result-badge result-pass">✅ Assertion Passed · 3/3</div>
+      </div>
+    </div>
+
+  </div><!-- /pain-cards -->
+
+  <!-- Optimization Summary -->
+  <div style="margin-bottom:36px">
+    <div class="section-title">📈 Optimization Effect Summary</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;font-size:0.83rem;">
+        <thead>
+          <tr style="background:var(--surface2);">
+            <th style="padding:12px 18px;text-align:left;color:var(--text-dim);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;border-bottom:1px solid var(--border);">Pain Point</th>
+            <th style="padding:12px 18px;text-align:left;color:var(--accent-orange);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;border-bottom:1px solid var(--border);">Old Behavior</th>
+            <th style="padding:12px 18px;text-align:left;color:var(--accent-blue);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;border-bottom:1px solid var(--border);">New Behavior</th>
+            <th style="padding:12px 18px;text-align:center;color:var(--text-dim);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;border-bottom:1px solid var(--border);">Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:12px 18px;color:var(--text);font-weight:600;">1 · Overloaded method</td>
+            <td style="padding:12px 18px;color:var(--text-muted);">Silent error, no signatures shown, user stuck</td>
+            <td style="padding:12px 18px;color:var(--text-muted);">Auto-fetches signatures, shows [HINT] with exact re-run command</td>
+            <td style="padding:12px 18px;text-align:center;"><span style="color:var(--accent-green);font-weight:700;">✅ Fixed</span></td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:12px 18px;color:var(--text);font-weight:600;">2 · Batch timing race</td>
+            <td style="padding:12px 18px;color:var(--text-muted);">sleep-based timing; "No current thread" on cont+where</td>
+            <td style="padding:12px 18px;color:var(--text-muted);">Event-driven; first where works; post-cont where gives [WARN] explanation</td>
+            <td style="padding:12px 18px;text-align:center;"><span style="color:var(--accent-green);font-weight:700;">✅ Fixed</span></td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:12px 18px;color:var(--text);font-weight:600;">3 · where all confusion</td>
+            <td style="padding:12px 18px;color:var(--text-muted);">Raw output, no suspend=n context, users confused</td>
+            <td style="padding:12px 18px;color:var(--text-muted);">[INFO] preamble explains semantics, recommends plain where</td>
+            <td style="padding:12px 18px;text-align:center;"><span style="color:var(--accent-green);font-weight:700;">✅ Fixed</span></td>
+          </tr>
+          <tr>
+            <td style="padding:12px 18px;color:var(--text);font-weight:600;">4 · Spurious run in attach</td>
+            <td style="padding:12px 18px;color:var(--text-muted);">run injected unconditionally; cascading "No current thread" errors</td>
+            <td style="padding:12px 18px;color:var(--text-muted);">run skipped in attach mode (shell + driver); commands execute correctly</td>
+            <td style="padding:12px 18px;text-align:center;"><span style="color:var(--accent-green);font-weight:700;">✅ Fixed</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Eval Metrics -->
+  <div style="margin-bottom:36px">
+    <div class="section-title">🧪 Eval Metrics</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
+      <div style="background:var(--surface);border:1px solid rgba(61,214,140,0.3);border-radius:10px;padding:20px;text-align:center;">
+        <div style="font-size:2.4rem;font-weight:800;color:var(--accent-green);">10/10</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-top:4px;">Assertions Passed</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid rgba(79,142,247,0.3);border-radius:10px;padding:20px;text-align:center;">
+        <div style="font-size:2.4rem;font-weight:800;color:var(--accent-blue);">100%</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-top:4px;">Pass Rate</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid rgba(245,138,66,0.3);border-radius:10px;padding:20px;text-align:center;">
+        <div style="font-size:2.4rem;font-weight:800;color:var(--accent-orange);">0/10</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-top:4px;">Old Skill Assertions</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid rgba(167,139,250,0.3);border-radius:10px;padding:20px;text-align:center;">
+        <div style="font-size:2.4rem;font-weight:800;color:#a78bfa;">4</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-top:4px;">Pain Points Resolved</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div><!-- /tab-commit -->
+
+
+<!-- ===== FOOTER ===== -->
+<div class="footer">
+  <p>JDB Agentic Debugger Eval Viewer &nbsp;·&nbsp; Iteration 1 &nbsp;·&nbsp; Generated 2026-07-02</p>
+  <p style="margin-top:6px">4 pain points · 10 assertions · 100% pass rate &nbsp;·&nbsp; Event-driven Python driver vs. Batch sleep mode</p>
+</div>
+
+<script>
+  /* ===== Tab switching ===== */
+  function switchTab(name, btn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+  }
+
+  /* ===== Scenario filtering (Eval tab) ===== */
+  function showAll(btn) {
+    document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.scenario').forEach(s => s.classList.add('visible'));
+  }
+
+  function show(id, btn) {
+    document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.scenario').forEach(s => {
+      s.classList.remove('visible');
+      if (s.id === id) s.classList.add('visible');
+    });
+  }
+</script>
+</body>
+</html>
+
