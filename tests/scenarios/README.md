@@ -9,7 +9,7 @@ All classes are in the **default package**.
 - `WarningAppTest.java` — multi-scenario bug demo (null handling, bounds, off-by-one, state corruption)
 - `ConsoleAppTest.java` — simple branch/lookup demo for step-through practice
 - `VisibilityTest.java` — Java Memory Model visibility bug (`volatile` missing)
-- `DeadlockTest.java` — deterministic two-thread deadlock
+- `ThreadTest.java` — deterministic two-thread deadlock
 - `ClassLoaderConflictTest.java` — same class name, different class loaders (`X cannot be cast to X`)
 - `AliasingCorruptionTest.java` — data corruption from mutable object aliasing
 
@@ -19,7 +19,7 @@ From `tests/scenarios/`:
 
 ```bash
 mkdir -p out
-javac -g -d out WarningAppTest.java ConsoleAppTest.java VisibilityTest.java DeadlockTest.java ClassLoaderConflictTest.java
+javac -g -d out WarningAppTest.java ConsoleAppTest.java VisibilityTest.java ThreadTest.java ClassLoaderConflictTest.java
 javac -g -d out AliasingCorruptionTest.java
 ```
 
@@ -29,7 +29,7 @@ javac -g -d out AliasingCorruptionTest.java
 java -cp out WarningAppTest
 java -cp out ConsoleAppTest BASIC
 java -cp out VisibilityTest
-java -cp out DeadlockTest
+java -cp out ThreadTest
 java -cp out ClassLoaderConflictTest
 java -cp out AliasingCorruptionTest
 ```
@@ -42,7 +42,7 @@ Use one test per terminal session (all default to port `5005`):
 java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out WarningAppTest
 java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out ConsoleAppTest BASIC
 java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out VisibilityTest
-java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out DeadlockTest
+java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out ThreadTest
 java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out ClassLoaderConflictTest
 java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -cp out AliasingCorruptionTest
 ```
@@ -86,7 +86,7 @@ Debug focus:
 - Compare `stopRequested` and `counter` across threads
 - Inspect worker thread state after `join(1000)`
 
-### DeadlockTest (runtime-only class of bug)
+### ThreadTest (runtime-only class of bug)
 
 Two threads acquire locks in opposite order and deadlock.
 

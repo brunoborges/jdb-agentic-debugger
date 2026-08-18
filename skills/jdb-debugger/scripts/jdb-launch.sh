@@ -17,6 +17,7 @@ Options:
   --jdb-args <args>      Additional arguments passed to jdb
   --app-args <args>      Arguments passed to the application's main method
   --suspend              Pause before executing main class (default: yes)
+  --no-suspend           Do not pause before executing main class
   -h, --help             Show this help message
 
 Examples:
@@ -33,6 +34,7 @@ SOURCEPATH=""
 CLASSPATH_ARG=""
 JDB_ARGS=""
 APP_ARGS=""
+declare -a POSITIONAL_APP_ARGS=()
 SUSPEND="y"
 
 while [[ $# -gt 0 ]]; do
@@ -41,20 +43,30 @@ while [[ $# -gt 0 ]]; do
       usage
       ;;
     --sourcepath)
+      [[ $# -ge 2 ]] || { echo "Error: --sourcepath requires a value." >&2; exit 2; }
       SOURCEPATH="$2"
       shift 2
       ;;
     --classpath)
+      [[ $# -ge 2 ]] || { echo "Error: --classpath requires a value." >&2; exit 2; }
       CLASSPATH_ARG="$2"
       shift 2
       ;;
     --jdb-args)
+      [[ $# -ge 2 ]] || { echo "Error: --jdb-args requires a value." >&2; exit 2; }
       JDB_ARGS="$2"
       shift 2
       ;;
     --app-args)
+      [[ $# -ge 2 ]] || { echo "Error: --app-args requires a value." >&2; exit 2; }
       APP_ARGS="$2"
+      read -r -a EXTRA_APP_ARGS <<< "$2"
+      POSITIONAL_APP_ARGS+=("${EXTRA_APP_ARGS[@]}")
       shift 2
+      ;;
+    --suspend)
+      SUSPEND="y"
+      shift
       ;;
     --no-suspend)
       SUSPEND="n"
@@ -62,9 +74,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       if [[ -z "$MAINCLASS" ]]; then
+        if [[ "$1" == -* ]]; then
+          echo "Error: Unknown option: $1" >&2
+          exit 2
+        fi
         MAINCLASS="$1"
       else
         APP_ARGS="${APP_ARGS:+$APP_ARGS }$1"
+        POSITIONAL_APP_ARGS+=("$1")
       fi
       shift
       ;;
@@ -119,10 +136,17 @@ echo ""
 echo "Tip: Type 'stop in ${MAINCLASS}.main' then 'run' to start debugging."
 echo ""
 
-# Build jdb command
-CMD="jdb -sourcepath ${SOURCEPATH} -classpath ${CLASSPATH_ARG}"
-[[ -n "$JDB_ARGS" ]] && CMD="$CMD $JDB_ARGS"
-CMD="$CMD $MAINCLASS"
-[[ -n "$APP_ARGS" ]] && CMD="$CMD $APP_ARGS"
+# Build an argument-safe command. The legacy aggregate argument options are
+# whitespace-delimited; callers needing embedded spaces should pass arguments
+# positionally after the main class.
+CMD=(jdb -sourcepath "$SOURCEPATH" -classpath "$CLASSPATH_ARG")
+if [[ -n "$JDB_ARGS" ]]; then
+  read -r -a EXTRA_JDB_ARGS <<< "$JDB_ARGS"
+  CMD+=("${EXTRA_JDB_ARGS[@]}")
+fi
+CMD+=("$MAINCLASS")
+if [[ -n "$APP_ARGS" ]]; then
+  CMD+=("${POSITIONAL_APP_ARGS[@]}")
+fi
 
-exec $CMD
+exec "${CMD[@]}"

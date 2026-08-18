@@ -38,6 +38,18 @@ All JDB operations MUST use the scripts from the `jdb-debugger` skill:
 
 On Windows, all scripts must be invoked via WSL: `wsl bash scripts/<script>.sh`
 
+## Report Contract
+
+Every findings file and final report uses the same evidence contract:
+- target class/process and launch or attachment mode
+- start time, end time, and elapsed duration
+- for each finding: symptom, runtime evidence, method/line when available, root
+  cause, confidence, and suggested fix
+- limitations, missing evidence, timeouts, and failed targets
+
+Reports and findings are requested output artifacts and may be written in the
+workspace. Debugger command files, wrapper scripts, and other helper files may not.
+
 ## Parallel Debugging Strategy
 
 When the request involves **multiple independent applications** to debug (e.g., a list of classes to investigate), you MUST parallelize the work:
@@ -111,5 +123,9 @@ Then: `jdb-analyst` → "Read all `findings-*.md` files in the working directory
 - ONLY gather context (read files, search code) before delegating
 - ALWAYS instruct sub-agents to use the skill scripts — never raw jdb commands
 - DO NOT let sub-agents access or search for `.java` source files
+- For source-free requests, require runtime evidence and never infer source details
+  that JDB did not expose
+- Before remote or production attachment, confirm authorization and warn that
+  breakpoints suspend application threads and expression evaluation may mutate state
 - If sub-agents or the analyst fail to write the final report, YOU MUST read the `findings-*.md` files and write `DEBUG-REPORT.md` yourself
 - NEVER re-dispatch a sub-agent synchronously after already dispatching it in background — wait for its findings file instead

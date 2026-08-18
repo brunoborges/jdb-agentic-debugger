@@ -8,7 +8,7 @@
 # By default, runs whichever CLIs are available. Use --agent to run one.
 #
 # Usage:
-#   ./tests/run-test.sh [--agent claude|copilot|all] [--model <model>] [--max-budget <usd>] [--allow-all] [--no-plugin] [--verbose]
+#   ./tests/run-test.sh [--agent claude|copilot|all] [--runs N] [--model <model>] [--max-budget <usd>] [--allow-all] [--no-plugin] [--verbose]
 #
 # Prerequisites:
 #   - JDK with javac and jdb on PATH
@@ -17,6 +17,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=tests/test-helpers.sh
 source "$SCRIPT_DIR/test-helpers.sh"
 
 # --- Timing & Report ---
@@ -25,8 +26,13 @@ TEST_START_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 REPORT_TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 RESULTS_DIR="$SCRIPT_DIR/test-results"
 mkdir -p "$RESULTS_DIR"
+METRICS_FILE="$RESULTS_DIR/benchmark-${REPORT_TIMESTAMP}.csv"
+echo "agent,run,plugin,model,jdk,commit,bugs_found,bugs_total,duration_seconds" > "$METRICS_FILE"
 REPORT_FILE="/dev/null"
 REPORT_FILES=()
+CURRENT_START_EPOCH=$TEST_START_EPOCH
+CURRENT_START_TS=$TEST_START_TS
+LAST_BUGS_FOUND=0
 
 # --- Defaults ---
 AGENT_FILTER="all"
@@ -35,23 +41,30 @@ MAX_BUDGET="25.00"
 VERBOSE=false
 ALLOW_ALL=false
 NO_PLUGIN=false
+RUNS=1
 
 # --- Parse args ---
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --agent)    AGENT_FILTER="$2"; shift 2 ;;
+    --runs)     RUNS="$2"; shift 2 ;;
     --model)    MODEL="$2"; shift 2 ;;
     --max-budget) MAX_BUDGET="$2"; shift 2 ;;
     --verbose)  VERBOSE=true; shift ;;
     --allow-all) ALLOW_ALL=true; shift ;;
     --no-plugin) NO_PLUGIN=true; shift ;;
     -h|--help)
-      echo "Usage: $0 [--agent claude|copilot|all] [--model <model>] [--max-budget <usd>] [--allow-all] [--no-plugin] [--verbose]"
+      echo "Usage: $0 [--agent claude|copilot|all] [--runs N] [--model <model>] [--max-budget <usd>] [--allow-all] [--no-plugin] [--verbose]"
       exit 0
       ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
+
+if [[ ! "$RUNS" =~ ^[0-9]+$ ]] || (( RUNS < 1 )); then
+  echo "--runs must be a positive integer" >&2
+  exit 2
+fi
 
 # --- Colors ---
 RED='\033[0;31m'
@@ -67,22 +80,34 @@ tee_report() { sed 's/\x1b\[[0-9;]*m//g' >> "$REPORT_FILE"; }
 
 start_report() {
   local agent_name="$1"
-  REPORT_FILE="$RESULTS_DIR/test-report-${agent_name}-${REPORT_TIMESTAMP}.txt"
+  local run_id="$2"
+  CURRENT_START_EPOCH=$(date +%s)
+  CURRENT_START_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  REPORT_FILE="$RESULTS_DIR/test-report-${agent_name}-run${run_id}-${REPORT_TIMESTAMP}.txt"
   REPORT_FILES+=("$REPORT_FILE")
   {
     echo "========================================================"
     echo "  JDB Agentic Debugger — Test Report (${agent_name})"
     echo "========================================================"
-    echo "Started at: $TEST_START_TS"
+    echo "Started at: $CURRENT_START_TS"
+    echo "Run: $run_id/$RUNS"
+    echo "Plugin: $([[ "$NO_PLUGIN" == true ]] && echo disabled || echo enabled)"
+    echo "Model: ${MODEL:-default}"
+    echo "Project version: $(cat "$REPO_ROOT/VERSION")"
+    echo "Commit: $(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    echo "JDK: $(java -version 2>&1 | head -1 | tr ',' ';')"
+    echo "Agent CLI: $("$agent_name" --version 2>/dev/null | head -1 | tr ',' ';' || echo unknown)"
     echo ""
   } > "$REPORT_FILE"
 }
 
 finish_report() {
+  local agent_name="$1"
+  local run_id="$2"
   local end_epoch end_ts elapsed min sec
   end_epoch=$(date +%s)
   end_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  elapsed=$((end_epoch - TEST_START_EPOCH))
+  elapsed=$((end_epoch - CURRENT_START_EPOCH))
   min=$((elapsed / 60))
   sec=$((elapsed % 60))
   {
@@ -90,12 +115,19 @@ finish_report() {
     echo "========================================================"
     echo "  Timing"
     echo "========================================================"
-    echo "Started at:  $TEST_START_TS"
+    echo "Started at:  $CURRENT_START_TS"
     echo "Finished at: $end_ts"
     echo "Duration:    ${min}m ${sec}s (${elapsed}s total)"
     echo "========================================================"
   } >> "$REPORT_FILE"
   log "Test report saved to: $REPORT_FILE"
+  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+    "$agent_name" "$run_id" \
+    "$([[ "$NO_PLUGIN" == true ]] && echo disabled || echo enabled)" \
+    "${MODEL:-default}" \
+    "$(java -version 2>&1 | head -1 | sed 's/.*version "\([^"]*\)".*/\1/')" \
+    "$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)" \
+    "$LAST_BUGS_FOUND" "$BUGS_TOTAL" "$elapsed" >> "$METRICS_FILE"
   REPORT_FILE="/dev/null"
 }
 
@@ -161,15 +193,14 @@ resolve_sources
 BASE_WORKDIR=$(make_temp_dir)
 log "Base work directory: $BASE_WORKDIR"
 
-cleanup() {
+trap '{
   if [[ "$VERBOSE" == true ]]; then
     warn "Keeping work directory for inspection: $BASE_WORKDIR"
   else
     rm -rf "$BASE_WORKDIR"
     log "Cleaned up $BASE_WORKDIR"
   fi
-}
-trap cleanup EXIT
+}' EXIT
 
 log "Compiling sample app with debug symbols..."
 compile_samples "$BASE_WORKDIR"
@@ -187,7 +218,7 @@ PROMPT=$(cat "$PROMPT_FILE")
 # ─────────────────────────────────────────────
 # Validation function
 # ─────────────────────────────────────────────
-BUGS_TOTAL=5
+BUGS_TOTAL=12
 
 check_bug() {
   local bug_num="$1"
@@ -251,8 +282,7 @@ validate_report() {
     && bugs_found=$((bugs_found + 1))
 
   check_bug 4 "StringIndexOutOfBoundsException (substring)" "$report_lower" \
-    "stringindexoutofboundsexception|indexoutofbounds|index.*out.*bound" \
-    "substring" "short|length|bound" \
+    "empty|string of length 0|length.?0" "substring" "indexoutofbounds|index.*out.*bound" \
     && bugs_found=$((bugs_found + 1))
 
   check_bug 5 "ConsoleAppTest discount lookup fails (untrimmed input)" "$report_lower" \
@@ -260,11 +290,42 @@ validate_report() {
     "discount|consoleapptest|console.*app" "premium|map.*get|lookup|0.*instead" \
     && bugs_found=$((bugs_found + 1))
 
+  check_bug 6 "Short warning preview exceeds bounds" "$report_lower" \
+    "short|\"hi\"|length.?2" "substring" "three|3|bound" \
+    && bugs_found=$((bugs_found + 1))
+
+  check_bug 7 "STANDARD discount tier is missing" "$report_lower" \
+    "standard" "missing|absent|unsupported|0%" "discount|map" \
+    && bugs_found=$((bugs_found + 1))
+
+  check_bug 8 "OrderLine instances are aliased" "$report_lower" \
+    "alias|same (object|instance|identity)|shared.*reference" "orderline|snapshot" \
+    "new.*(each|inside)|reuse" \
+    && bugs_found=$((bugs_found + 1))
+
+  check_bug 9 "Cross-classloader cast fails" "$report_lower" \
+    "classcastexception|cannot be cast" "classloader|class loader" "classa|classb|payload" \
+    && bugs_found=$((bugs_found + 1))
+
+  check_bug 10 "Opposite lock order deadlocks" "$report_lower" \
+    "deadlock|circular wait" "lock_a|lock a" "lock_b|lock b" \
+    && bugs_found=$((bugs_found + 1))
+
+  check_bug 11 "Shared stop flag is not visible" "$report_lower" \
+    "volatile|visibility|memory model" "stoprequested" "worker|loop|thread" \
+    && bugs_found=$((bugs_found + 1))
+
+  check_bug 12 "setDaemon is called after start" "$report_lower" \
+    "illegalthreadstateexception|illegal thread state" "setdaemon|daemon" \
+    "after.*start|already.*start" \
+    && bugs_found=$((bugs_found + 1))
+
   separator
+  LAST_BUGS_FOUND=$bugs_found
   if [[ $bugs_found -eq $BUGS_TOTAL ]]; then
     pass "[$agent_name] $bugs_found/$BUGS_TOTAL bugs detected ✅"
     return 0
-  elif [[ $bugs_found -ge 3 ]]; then
+  elif [[ $bugs_found -ge 9 ]]; then
     warn "[$agent_name] $bugs_found/$BUGS_TOTAL bugs detected (acceptable) ⚠️"
     return 0
   else
@@ -278,7 +339,8 @@ validate_report() {
 # ─────────────────────────────────────────────
 setup_workdir() {
   local agent_name="$1"
-  local workdir="$BASE_WORKDIR/$agent_name"
+  local run_id="$2"
+  local workdir="$BASE_WORKDIR/${agent_name}-run${run_id}"
 
   mkdir -p "$workdir"
 
@@ -297,10 +359,11 @@ setup_workdir() {
 # Run test for: Claude Code CLI
 # ─────────────────────────────────────────────
 run_claude() {
+  local run_id="$1"
   local workdir
-  workdir=$(setup_workdir "claude")
+  workdir=$(setup_workdir "claude" "$run_id")
 
-  start_report "claude"
+  start_report "claude" "$run_id"
   banner "Claude Code CLI" "Running"
 
   log "Work directory: $workdir"
@@ -355,20 +418,21 @@ run_claude() {
   validate_report "Claude" "$workdir/DEBUG-REPORT.md"
 
   if [[ -f "$workdir/DEBUG-REPORT.md" ]]; then
-    cp "$workdir/DEBUG-REPORT.md" "$RESULTS_DIR/DEBUG-REPORT-claude-${REPORT_TIMESTAMP}.md"
-    log "Saved: $RESULTS_DIR/DEBUG-REPORT-claude-${REPORT_TIMESTAMP}.md"
+    cp "$workdir/DEBUG-REPORT.md" "$RESULTS_DIR/DEBUG-REPORT-claude-run${run_id}-${REPORT_TIMESTAMP}.md"
+    log "Saved: $RESULTS_DIR/DEBUG-REPORT-claude-run${run_id}-${REPORT_TIMESTAMP}.md"
   fi
-  finish_report
+  finish_report "claude" "$run_id"
 }
 
 # ─────────────────────────────────────────────
 # Run test for: GitHub Copilot CLI
 # ─────────────────────────────────────────────
 run_copilot() {
+  local run_id="$1"
   local workdir
-  workdir=$(setup_workdir "copilot")
+  workdir=$(setup_workdir "copilot" "$run_id")
 
-  start_report "copilot"
+  start_report "copilot" "$run_id"
   banner "GitHub Copilot CLI" "Running"
 
   log "Work directory: $workdir"
@@ -416,10 +480,10 @@ run_copilot() {
   validate_report "Copilot" "$workdir/DEBUG-REPORT.md"
 
   if [[ -f "$workdir/DEBUG-REPORT.md" ]]; then
-    cp "$workdir/DEBUG-REPORT.md" "$RESULTS_DIR/DEBUG-REPORT-copilot-${REPORT_TIMESTAMP}.md"
-    log "Saved: $RESULTS_DIR/DEBUG-REPORT-copilot-${REPORT_TIMESTAMP}.md"
+    cp "$workdir/DEBUG-REPORT.md" "$RESULTS_DIR/DEBUG-REPORT-copilot-run${run_id}-${REPORT_TIMESTAMP}.md"
+    log "Saved: $RESULTS_DIR/DEBUG-REPORT-copilot-run${run_id}-${REPORT_TIMESTAMP}.md"
   fi
-  finish_report
+  finish_report "copilot" "$run_id"
 }
 
 # ═════════════════════════════════════════════
@@ -427,15 +491,17 @@ run_copilot() {
 # ═════════════════════════════════════════════
 OVERALL_EXIT=0
 
-for agent in "${AGENTS[@]}"; do
-  case "$agent" in
-    claude)
-      run_claude  || OVERALL_EXIT=1
-      ;;
-    copilot)
-      run_copilot || OVERALL_EXIT=1
-      ;;
-  esac
+for ((run_id = 1; run_id <= RUNS; run_id++)); do
+  for agent in "${AGENTS[@]}"; do
+    case "$agent" in
+      claude)
+        run_claude "$run_id" || OVERALL_EXIT=1
+        ;;
+      copilot)
+        run_copilot "$run_id" || OVERALL_EXIT=1
+        ;;
+    esac
+  done
 done
 
 # ─────────────────────────────────────────────
@@ -456,14 +522,16 @@ echo -e "${BOLD}║                  FINAL SUMMARY                   ║${NC}"
 echo -e "${BOLD}╚══════════════════════════════════════════════════╝${NC}"
 echo ""
 
-for agent in "${AGENTS[@]}"; do
-  local_workdir="$BASE_WORKDIR/$agent"
-  report="$local_workdir/DEBUG-REPORT.md"
-  if [[ -f "$report" ]]; then
-    echo -e "${GREEN}[PASS]${NC} $agent — DEBUG-REPORT.md created"
-  else
-    echo -e "${RED}[FAIL]${NC} $agent — DEBUG-REPORT.md missing"
-  fi
+for ((run_id = 1; run_id <= RUNS; run_id++)); do
+  for agent in "${AGENTS[@]}"; do
+    local_workdir="$BASE_WORKDIR/${agent}-run${run_id}"
+    report="$local_workdir/DEBUG-REPORT.md"
+    if [[ -f "$report" ]]; then
+      echo -e "${GREEN}[PASS]${NC} $agent run $run_id — DEBUG-REPORT.md created"
+    else
+      echo -e "${RED}[FAIL]${NC} $agent run $run_id — DEBUG-REPORT.md missing"
+    fi
+  done
 done
 
 echo ""
@@ -474,6 +542,7 @@ else
 fi
 
 echo -e "${CYAN}[test]${NC} Duration: ${ELAPSED_MIN}m ${ELAPSED_SEC}s (started $TEST_START_TS, finished $TEST_END_TS)"
+echo -e "${CYAN}[test]${NC} Machine-readable metrics: $METRICS_FILE"
 
 if [[ "$VERBOSE" == true ]]; then
   echo -e "${CYAN}[test]${NC} Work directory preserved: $BASE_WORKDIR"

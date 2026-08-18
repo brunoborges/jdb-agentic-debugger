@@ -28,6 +28,9 @@ On Windows, always invoke via WSL:
 wsl bash scripts/<script>.sh [args]
 ```
 
+Requested `findings-*.md` files are allowed output artifacts. Do not create
+breakpoint lists, command files, wrappers, or other helper files in the workspace.
+
 ## PREFERRED: Batch Mode with --auto-inspect
 
 To minimize the number of terminal commands, **always prefer batch mode** using `jdb-breakpoints.sh` with `--auto-inspect` or `--cmd` flags. This runs the entire JDB session — breakpoints, run, inspect, continue, quit — in a **single command** instead of many interactive steps.
@@ -198,8 +201,11 @@ After debugging is complete, write your findings to a file named `findings-<Clas
 
 The findings file MUST include:
 - `SESSION_START_TIME` and `SESSION_END_TIME` timestamps
-- For each bug found: symptom, exception type, method and line, root cause, and suggested fix
+- Target and launch/attachment mode
+- For each bug found: symptom, runtime evidence, method and line when available,
+  root cause, confidence, and suggested fix
 - Any timeout evidence (if the app hung)
+- Limitations, failed observations, and unavailable source/debug information
 
 Also summarize findings in your text response as a backup.
 
@@ -210,5 +216,9 @@ Also summarize findings in your text response as a backup.
 - **PREFER batch mode** (`--auto-inspect` or `--cmd`) over interactive mode to minimize terminal commands
 - ONLY fall back to interactive JDB commands if batch output is insufficient
 - DO NOT modify source code or project configuration
+- If source is unavailable, rely only on JDB/runtime evidence and clearly mark
+  unavailable line or source details
+- Before remote or production attachment, confirm authorization. Warn that
+  breakpoints suspend threads and evaluated methods may change application state
 - On Windows, always use `wsl bash` to invoke scripts
 - Always clean up: `quit` when the debugging session is complete

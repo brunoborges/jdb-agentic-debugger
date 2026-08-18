@@ -73,42 +73,52 @@ while [[ $# -gt 0 ]]; do
       usage
       ;;
     --breakpoints)
+      [[ $# -ge 2 ]] || { echo "Error: --breakpoints requires a value." >&2; exit 2; }
       BREAKPOINTS_FILE="$2"
       shift 2
       ;;
     --bp)
+      [[ $# -ge 2 ]] || { echo "Error: --bp requires a value." >&2; exit 2; }
       BP_ARGS+=("$2")
       shift 2
       ;;
     --cmd)
+      [[ $# -ge 2 ]] || { echo "Error: --cmd requires a value." >&2; exit 2; }
       CMD_ARGS+=("$2")
       shift 2
       ;;
     --auto-inspect)
+      [[ $# -ge 2 ]] || { echo "Error: --auto-inspect requires a value." >&2; exit 2; }
       AUTO_INSPECT="$2"
       shift 2
       ;;
     --timeout)
+      [[ $# -ge 2 ]] || { echo "Error: --timeout requires a value." >&2; exit 2; }
       TIMEOUT="$2"
       shift 2
       ;;
     --host)
+      [[ $# -ge 2 ]] || { echo "Error: --host requires a value." >&2; exit 2; }
       HOST="$2"
       shift 2
       ;;
     --port)
+      [[ $# -ge 2 ]] || { echo "Error: --port requires a value." >&2; exit 2; }
       PORT="$2"
       shift 2
       ;;
     --mainclass)
+      [[ $# -ge 2 ]] || { echo "Error: --mainclass requires a value." >&2; exit 2; }
       MAINCLASS="$2"
       shift 2
       ;;
     --sourcepath)
+      [[ $# -ge 2 ]] || { echo "Error: --sourcepath requires a value." >&2; exit 2; }
       SOURCEPATH="$2"
       shift 2
       ;;
     --classpath)
+      [[ $# -ge 2 ]] || { echo "Error: --classpath requires a value." >&2; exit 2; }
       CLASSPATH_ARG="$2"
       shift 2
       ;;
@@ -118,6 +128,19 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ ! "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+  echo "Error: --port must be an integer from 1 to 65535." >&2
+  exit 2
+fi
+if [[ -n "$AUTO_INSPECT" ]] && { [[ ! "$AUTO_INSPECT" =~ ^[0-9]+$ ]] || (( AUTO_INSPECT < 1 )); }; then
+  echo "Error: --auto-inspect must be a positive integer." >&2
+  exit 2
+fi
+if [[ -n "$TIMEOUT" ]] && { [[ ! "$TIMEOUT" =~ ^[0-9]+([.][0-9]+)?$ ]] || [[ "$TIMEOUT" == 0 || "$TIMEOUT" == 0.0 ]]; }; then
+  echo "Error: --timeout must be a positive number." >&2
+  exit 2
+fi
 
 # Validate: need either --breakpoints or --bp
 if [[ -z "$BREAKPOINTS_FILE" && ${#BP_ARGS[@]} -eq 0 ]]; then
@@ -170,19 +193,19 @@ echo "Loaded $BP_COUNT breakpoint/catch commands"
 echo "========================"
 echo ""
 
-# Build jdb command
+# Build an argument-safe jdb command.
 if [[ -n "$HOST" || -z "$MAINCLASS" ]]; then
   # Attach mode
   TARGET_HOST="${HOST:-localhost}"
-  CMD="jdb -attach ${TARGET_HOST}:${PORT}"
+  CMD=(jdb -attach "${TARGET_HOST}:${PORT}")
 else
   # Launch mode
-  CMD="jdb"
-  [[ -n "$CLASSPATH_ARG" ]] && CMD="$CMD -classpath ${CLASSPATH_ARG}"
-  CMD="$CMD $MAINCLASS"
+  CMD=(jdb)
+  [[ -n "$CLASSPATH_ARG" ]] && CMD+=(-classpath "$CLASSPATH_ARG")
+  CMD+=("$MAINCLASS")
 fi
 
-[[ -n "$SOURCEPATH" ]] && CMD="$CMD -sourcepath ${SOURCEPATH}"
+[[ -n "$SOURCEPATH" ]] && CMD+=(-sourcepath "$SOURCEPATH")
 
 # Determine mode: batch (--auto-inspect or --cmd) vs interactive
 IS_BATCH=false
@@ -238,41 +261,100 @@ if [[ "$IS_BATCH" == true ]]; then
           fi
         done
       fi
-    ) | $CMD
+    ) | "${CMD[@]}"
   }
 
   if [[ -n "$TIMEOUT" ]]; then
     # Run with timeout — kill the session if it exceeds the limit
-    run_batch &
+    terminate_tree() {
+      local parent="$1"
+      local signal="$2"
+      local child
+      if command -v pgrep &>/dev/null; then
+        while IFS= read -r child; do
+          [[ -z "$child" ]] || terminate_tree "$child" "$signal"
+        done < <(pgrep -P "$parent" 2>/dev/null || true)
+      fi
+      kill "-$signal" "$parent" 2>/dev/null || true
+    }
+
+    TIMEOUT_MARKER=$(mktemp "${TMPDIR:-/tmp}/jdb-timeout-XXXXXX")
+    rm -f "$TIMEOUT_MARKER"
+    trap 'rm -f "$TIMEOUT_MARKER"' EXIT HUP INT TERM
+    if command -v setsid &>/dev/null; then
+      run_batch_with_group() {
+        (
+          while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            echo "$line"
+            sleep "$BP_DELAY"
+          done < <(printf '%b' "$INIT_CMDS")
+          if [[ -n "$AUTO_INSPECT" ]]; then
+            echo run; sleep "$RUN_DELAY"
+            for ((i = 1; i <= AUTO_INSPECT; i++)); do
+              echo where; sleep "$CMD_DELAY"
+              echo locals; sleep "$CMD_DELAY"
+              echo cont; sleep "$CONT_DELAY"
+            done
+            echo quit
+          else
+            for cmd_arg in "${CMD_ARGS[@]}"; do
+              echo "$cmd_arg"
+              if [[ "$cmd_arg" == run ]]; then sleep "$RUN_DELAY"
+              elif [[ "$cmd_arg" == cont ]]; then sleep "$CONT_DELAY"
+              else sleep "$CMD_DELAY"; fi
+            done
+          fi
+        ) | setsid "${CMD[@]}"
+      }
+      run_batch_with_group &
+    else
+      run_batch &
+    fi
     BATCH_PID=$!
     (
+      trap - EXIT
       sleep "$TIMEOUT"
       if kill -0 "$BATCH_PID" 2>/dev/null; then
+        : > "$TIMEOUT_MARKER"
         echo ""
         echo "=== TIMEOUT: JDB session killed after ${TIMEOUT}s (app may be hanging/deadlocked) ==="
-        kill -TERM "$BATCH_PID" 2>/dev/null
+        terminate_tree "$BATCH_PID" TERM
         sleep 2
-        kill -9 "$BATCH_PID" 2>/dev/null
+        terminate_tree "$BATCH_PID" KILL
       fi
     ) &
     TIMER_PID=$!
-    wait "$BATCH_PID" 2>/dev/null || true
+    set +e
+    wait "$BATCH_PID" 2>/dev/null
+    BATCH_STATUS=$?
+    set -e
     kill "$TIMER_PID" 2>/dev/null || true
     wait "$TIMER_PID" 2>/dev/null || true
+    if [[ -f "$TIMEOUT_MARKER" ]]; then
+      rm -f "$TIMEOUT_MARKER"
+      trap - EXIT HUP INT TERM
+      exit 124
+    fi
+    rm -f "$TIMEOUT_MARKER"
+    trap - EXIT HUP INT TERM
+    exit "$BATCH_STATUS"
   else
     run_batch
   fi
 
 else
   # Interactive mode: feed breakpoints then hand control to terminal
-  TMPFILE=$(mktemp /tmp/jdb-bp-XXXXXX.txt)
-  printf "$INIT_CMDS" > "$TMPFILE"
+  TMPFILE=$(mktemp "${TMPDIR:-/tmp}/jdb-bp-XXXXXX.txt")
+  trap 'rm -f "$TMPFILE"' EXIT HUP INT TERM
+  printf '%b' "$INIT_CMDS" > "$TMPFILE"
 
   echo "Setting breakpoints and starting JDB..."
   echo ""
 
-  (cat "$TMPFILE"; cat) | $CMD
+  (cat "$TMPFILE"; cat) | "${CMD[@]}"
 
   # Cleanup
   rm -f "$TMPFILE"
+  trap - EXIT HUP INT TERM
 fi

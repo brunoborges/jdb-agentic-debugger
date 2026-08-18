@@ -5,7 +5,7 @@ compatibility: Requires JDK (jdb command), Bash shell, and a running or launchab
 allowed-tools: Bash(jdb:*) Bash(java:*) Bash(python3:*) Read
 metadata:
   author: brunoborges
-  version: "1.0"
+  version: "1.0.0"
 ---
 
 # Java Debugger (JDB) Skill
@@ -14,8 +14,10 @@ Debug Java applications interactively using the JDK's built-in command-line debu
 
 ## Critical Rules for Agents
 
-1. **NEVER create files in the workspace** (no `bp.txt`, `cmds.txt`, wrapper scripts, etc.).
-   Use the inline CLI flags (`--bp`, `--cmd`, `--auto-inspect`, `--timeout`) provided by the skill scripts.
+1. **NEVER create debugger helper files in the workspace** (no `bp.txt`, `cmds.txt`,
+   wrapper scripts, etc.). Requested report artifacts such as `findings-*.md` and
+   `DEBUG-REPORT.md` are allowed. Use the inline CLI flags (`--bp`, `--cmd`,
+   `--auto-inspect`, `--timeout`) provided by the skill scripts.
 2. **ALWAYS use the skill scripts** in `scripts/`. Never write
    custom JDB wrapper scripts, FIFO-based launchers, or shell scripts to drive JDB.
 3. **Compile first, then debug.** Ensure classes are compiled before launching JDB.
@@ -299,8 +301,9 @@ dump dataMap
 
 ## Important Notes
 
-- **NEVER create files in the workspace.** Use inline `--bp`, `--cmd`, `--auto-inspect`, and `--timeout`
-  flags. The scripts handle all temp files internally in `/tmp/` and clean up after themselves.
+- **NEVER create debugger helper files in the workspace.** Requested report
+  artifacts are allowed. Use inline `--bp`, `--cmd`, `--auto-inspect`, and
+  `--timeout` flags. The scripts handle temporary input internally and clean up.
 - **Use `--timeout` for potentially hanging apps.** Apps that deadlock or loop indefinitely
   will block JDB forever. Add `--timeout 60` (or appropriate value) so the session is
   automatically killed. The output will include a `TIMEOUT:` marker when triggered.
@@ -313,6 +316,9 @@ dump dataMap
 - **Thread context**: Many commands operate on the "current thread". Use `thread` to switch.
 - **Suspend mode**: When attaching with `suspend=y`, the JVM pauses until JDB connects. Use `suspend=n` for non-blocking attachment.
 - **Expression evaluation**: `print` and `eval` can call methods on live objects — use with caution in production.
+- **Remote/production safety**: obtain authorization before attaching, prefer a
+  loopback or tunneled JDWP endpoint, avoid broad exception catchpoints on busy
+  services, and treat evaluated methods as potentially state-changing.
 - **Batch timing**: The batch mode uses configurable delays. Override via env vars:
   `JDB_BP_DELAY` (default: 2s), `JDB_RUN_DELAY` (3s), `JDB_CMD_DELAY` (0.5s), `JDB_CONT_DELAY` (1s).
 

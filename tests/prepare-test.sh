@@ -30,6 +30,7 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=tests/test-helpers.sh
 source "$SCRIPT_DIR/test-helpers.sh"
 
 # --- Colors ---
