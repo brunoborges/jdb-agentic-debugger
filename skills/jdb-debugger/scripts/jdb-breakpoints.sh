@@ -74,20 +74,78 @@ declare -a CMD_ARGS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -h|--help) usage ;;
-    --breakpoints) BREAKPOINTS_FILE="$2"; shift 2 ;;
-    --bp) BP_ARGS+=("$2"); shift 2 ;;
-    --cmd) CMD_ARGS+=("$2"); shift 2 ;;
-    --auto-inspect) AUTO_INSPECT="$2"; shift 2 ;;
-    --timeout) TIMEOUT="$2"; shift 2 ;;
-    --host) HOST="$2"; shift 2 ;;
-    --port) PORT="$2"; shift 2 ;;
-    --mainclass) MAINCLASS="$2"; shift 2 ;;
-    --sourcepath) SOURCEPATH="$2"; shift 2 ;;
-    --classpath) CLASSPATH_ARG="$2"; shift 2 ;;
-    *) echo "Unknown option: $1"; usage ;;
+    -h|--help)
+      usage
+      ;;
+    --breakpoints)
+      [[ $# -ge 2 ]] || { echo "Error: --breakpoints requires a value." >&2; exit 2; }
+      BREAKPOINTS_FILE="$2"
+      shift 2
+      ;;
+    --bp)
+      [[ $# -ge 2 ]] || { echo "Error: --bp requires a value." >&2; exit 2; }
+      BP_ARGS+=("$2")
+      shift 2
+      ;;
+    --cmd)
+      [[ $# -ge 2 ]] || { echo "Error: --cmd requires a value." >&2; exit 2; }
+      CMD_ARGS+=("$2")
+      shift 2
+      ;;
+    --auto-inspect)
+      [[ $# -ge 2 ]] || { echo "Error: --auto-inspect requires a value." >&2; exit 2; }
+      AUTO_INSPECT="$2"
+      shift 2
+      ;;
+    --timeout)
+      [[ $# -ge 2 ]] || { echo "Error: --timeout requires a value." >&2; exit 2; }
+      TIMEOUT="$2"
+      shift 2
+      ;;
+    --host)
+      [[ $# -ge 2 ]] || { echo "Error: --host requires a value." >&2; exit 2; }
+      HOST="$2"
+      shift 2
+      ;;
+    --port)
+      [[ $# -ge 2 ]] || { echo "Error: --port requires a value." >&2; exit 2; }
+      PORT="$2"
+      shift 2
+      ;;
+    --mainclass)
+      [[ $# -ge 2 ]] || { echo "Error: --mainclass requires a value." >&2; exit 2; }
+      MAINCLASS="$2"
+      shift 2
+      ;;
+    --sourcepath)
+      [[ $# -ge 2 ]] || { echo "Error: --sourcepath requires a value." >&2; exit 2; }
+      SOURCEPATH="$2"
+      shift 2
+      ;;
+    --classpath)
+      [[ $# -ge 2 ]] || { echo "Error: --classpath requires a value." >&2; exit 2; }
+      CLASSPATH_ARG="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown option: $1"
+      usage
+      ;;
   esac
 done
+
+if [[ ! "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+  echo "Error: --port must be an integer from 1 to 65535." >&2
+  exit 2
+fi
+if [[ -n "$AUTO_INSPECT" ]] && { [[ ! "$AUTO_INSPECT" =~ ^[0-9]+$ ]] || (( AUTO_INSPECT < 1 )); }; then
+  echo "Error: --auto-inspect must be a positive integer." >&2
+  exit 2
+fi
+if [[ -n "$TIMEOUT" ]] && { [[ ! "$TIMEOUT" =~ ^[0-9]+([.][0-9]+)?$ ]] || [[ "$TIMEOUT" == 0 || "$TIMEOUT" == 0.0 ]]; }; then
+  echo "Error: --timeout must be a positive number." >&2
+  exit 2
+fi
 
 # ── Validation ────────────────────────────────────────────────────────────────
 if [[ -z "$BREAKPOINTS_FILE" && ${#BP_ARGS[@]} -eq 0 ]]; then
@@ -194,7 +252,8 @@ PYTHON_DRIVER="${SCRIPT_DIR}/jdb-interactive.py"
 if [[ -f "$PYTHON_DRIVER" ]] && command -v python3 &>/dev/null; then
   # ── Event-driven path ──────────────────────────────────────────────────────
   # Build config JSON
-  CFG_FILE=$(mktemp /tmp/jdb-cfg-XXXXXX.json)
+  CFG_FILE=$(mktemp "${TMPDIR:-/tmp}/jdb-cfg-XXXXXX")
+  trap 'rm -f "$CFG_FILE"' EXIT HUP INT TERM
 
   # Serialize arrays to JSON
   jdb_cmd_json=$(python3 -c "import json,sys; print(json.dumps(sys.argv[1:]))" "${JDB_CMD_PARTS[@]}")
@@ -211,8 +270,13 @@ if [[ -f "$PYTHON_DRIVER" ]] && command -v python3 &>/dev/null; then
 }
 JSONEOF
 
+  set +e
   python3 "$PYTHON_DRIVER" "$CFG_FILE"
+  DRIVER_STATUS=$?
+  set -e
   rm -f "$CFG_FILE"
+  trap - EXIT HUP INT TERM
+  exit "$DRIVER_STATUS"
 
 else
   # ── Sleep-based fallback ───────────────────────────────────────────────────

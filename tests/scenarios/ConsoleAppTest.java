@@ -10,7 +10,7 @@ public class ConsoleAppTest {
                 "VIP", 30);
 
         if (args.length == 0) {
-            IO.println("Usage: java App <TIER>");
+            System.out.println("Usage: java App <TIER>");
             return;
         }
 
@@ -22,6 +22,6 @@ public class ConsoleAppTest {
             discount = 0;
         }
 
-        IO.println("Discount = " + discount + "%");
+        System.out.println("Discount = " + discount + "%");
     }
 }

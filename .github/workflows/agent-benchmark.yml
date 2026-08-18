@@ -1,0 +1,44 @@
+name: Agent benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: Authenticated CLI available on the runner
+        required: true
+        type: choice
+        options: [copilot, claude]
+      model:
+        description: Optional model override
+        required: false
+        type: string
+      baseline:
+        description: Run without plugin files
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: [self-hosted, jdb-agent-benchmark]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run authenticated agent evaluation
+        env:
+          AGENT: ${{ inputs.agent }}
+          MODEL: ${{ inputs.model }}
+          BASELINE: ${{ inputs.baseline }}
+        run: |
+          args=(--agent "$AGENT")
+          [[ -n "$MODEL" ]] && args+=(--model "$MODEL")
+          [[ "$BASELINE" == true ]] && args+=(--no-plugin)
+          ./tests/run-test.sh "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agent-benchmark-${{ inputs.agent }}
+          path: tests/test-results/

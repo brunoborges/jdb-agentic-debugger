@@ -36,13 +36,15 @@ PROMPT_PAT = re.compile(r'(?:^|\n)\s*(?:>|\w+\[\d+\])\s*$')
 
 # Breakpoint confirmation (Chinese or English JDB output)
 # NOTE: Must NOT match "无法设置断点" (failed to set breakpoint)
-BP_SET_PAT = re.compile(r'(?<!无法)(设置断点|Breakpoint set|正在延迟断点|Deferring breakpoint|设置延迟的未捕获)')
+BP_SET_PAT = re.compile(
+    r'(?<!无法)(设置断点|Breakpoint set|正在延迟断点|Deferring (?:breakpoint|all)|设置延迟的未捕获)'
+)
 
 # Overloaded method error
 BP_OVERLOAD_PAT = re.compile(r'(已重载方法|already overloaded|请指定参数)')
 
 # Breakpoint was hit
-BP_HIT_PAT = re.compile(r'(断点命中|Breakpoint hit)')
+BP_HIT_PAT = re.compile(r'(断点命中|Breakpoint hit|发生异常|Exception occurred)')
 
 # JDB initialized — also matches the first prompt ">"
 JDB_INIT_PAT = re.compile(r'(正在初始化jdb|Initializing jdb|\> \s*$|> $)')
@@ -58,6 +60,8 @@ NOT_SUSPENDED_PAT = re.compile(r'(未指定线程|No current thread|当前线程
 class JDBSession:
     def __init__(self, cmd, timeout=60):
         self.timeout = timeout
+        self.deadline = time.monotonic() + timeout
+        self.timed_out = False
         env = os.environ.copy()
         # Force UTF-8 output so we can match Chinese or English JDB strings
         env.setdefault('JAVA_TOOL_OPTIONS', '-Dfile.encoding=UTF-8')
@@ -142,9 +146,9 @@ class JDBSession:
         """
         if timeout is None:
             timeout = self.timeout
-        deadline = time.time() + timeout
+        deadline = min(time.monotonic() + timeout, self.deadline)
         accumulated = ''
-        while time.time() < deadline:
+        while time.monotonic() < deadline:
             chunk = self.drain()
             if chunk:
                 accumulated += chunk
@@ -156,6 +160,8 @@ class JDBSession:
             if self._done:
                 break
             time.sleep(0.05)
+        if time.monotonic() >= self.deadline:
+            self.timed_out = True
         return -1, accumulated
 
     def wait_for_prompt(self, timeout=None):
@@ -171,6 +177,23 @@ class JDBSession:
             self.proc.terminate()
         except Exception:
             pass
+        try:
+            self.proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            self.proc.kill()
+            self.proc.wait()
+
+
+def exit_on_timeout(sess):
+    if not sess.timed_out:
+        return
+    print(
+        f"\n=== TIMEOUT: JDB session killed after {sess.timeout}s "
+        "(app may be hanging/deadlocked) ===",
+        flush=True,
+    )
+    sess.close()
+    sys.exit(124)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -200,6 +223,7 @@ def main():
         timeout=15
     )
     if idx < 0:
+        exit_on_timeout(sess)
         print("[ERROR] JDB did not initialize within 15s. Check connection.", flush=True)
         print("[HINT] Verify the JDWP port is open: nc -z <host> <port>", flush=True)
         print("[HINT] Only one JDB session can connect at a time (JDWP single-connection limit).", flush=True)
@@ -273,6 +297,7 @@ def main():
             sys.exit(1)
 
         elif idx < 0:
+            exit_on_timeout(sess)
             print(f"[WARN] Timeout waiting for breakpoint confirmation for: {bp_cmd}", flush=True)
         # else: breakpoint set ok
 
@@ -283,6 +308,7 @@ def main():
 
         idx, out = sess.wait_for([BP_HIT_PAT], timeout=timeout)
         if idx < 0:
+            exit_on_timeout(sess)
             print(f"[WARN] Timeout ({timeout}s): no breakpoint was hit.", flush=True)
             print("[HINT] Try increasing --timeout or trigger the action in the target app.", flush=True)
             sess.send("quit")
@@ -339,10 +365,11 @@ def main():
         else:
             sess.wait_for_prompt(timeout=8)
 
+        exit_on_timeout(sess)
+
     sess.close()
     print("\n[JDB session complete]", flush=True)
 
 
 if __name__ == '__main__':
     main()
-

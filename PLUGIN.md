@@ -123,8 +123,8 @@ AI: [Analyzes the stack trace]
 
 ## Prerequisites
 
-- **JDK installed** (any version with `jdb` — JDK 8+)
-- **Bash shell** (Linux/macOS native, Windows via WSL)
+- **JDK 17, 21, or 25** with `java`, `javac`, and `jdb` on `PATH`
+- **Bash 3.2+** (Linux/macOS native, Windows via WSL 2)
 - **Target JVM with JDWP enabled** for remote debugging:
   ```bash
   java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 \
