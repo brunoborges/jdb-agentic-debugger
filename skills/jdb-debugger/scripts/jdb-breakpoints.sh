@@ -49,7 +49,7 @@ ATTACH MODE GUIDE (--host):
   - Use "where" to see the breakpoint thread's stack (always works)
   - "where all" only shows threads that are suspended; in suspend=n JVMs,
     only the breakpoint thread is suspended, so it's not much more useful.
-    The script automatically substitutes "where" and explains why.
+    The script prints an explanation before running "where all" to reduce confusion.
 
   SINGLE CONNECTION LIMIT: JDWP allows only ONE debugger at a time.
   If another JDB session is connected, you'll see:
